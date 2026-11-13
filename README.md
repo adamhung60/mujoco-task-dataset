@@ -1,8 +1,7 @@
 # MuJoCo task dataset dashboard
 
-This repository contains the static public dashboard for current task videos.
-The source builder lives in [robot-task-workflow](https://github.com/adamhung60/robot-task-workflow/tree/main/public_dashboard).
+[Browse the public dashboard](https://adamhung60.github.io/mujoco-task-dataset/).
 
-The dashboard is a snapshot of approved release evidence and current unreleased previews. Videos and the catalog are regenerated from the task repository; edit that source rather than these generated files.
+This repository contains the generated static site and current task videos. The dashboard builder and release records are maintained separately; updates to those sources are exported here as snapshots.
 
 No license is granted for this repository.
