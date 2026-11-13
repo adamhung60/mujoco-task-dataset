@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Robot task and variation index</title>
+<style>
+:root{color-scheme:dark;--bg:#10151e;--panel:#1a2635;--text:#e5edf5;--muted:#aebdcc}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px system-ui}
+header{padding:20px 24px 12px}h1{font-size:26px;margin:0 0 4px}h2{font-size:18px;margin:0 0 12px}
+p{color:var(--muted);line-height:1.45}a{color:#9bd5ff}
+.links,.controls{display:flex;flex-wrap:wrap;gap:12px;align-items:center}.links{margin:12px 0}#released{display:contents}
+.summary{display:flex;gap:12px;flex-wrap:wrap;padding:0 24px 16px}.stat{background:var(--panel);padding:10px 14px;border-radius:8px;min-width:120px}.stat b{display:block;font-size:20px}
+.controls{position:sticky;top:0;z-index:4;background:#10151ef5;border-block:1px solid #334155;padding:12px 24px}
+select,button,input{background:#263449;color:var(--text);border:1px solid #506078;border-radius:6px;padding:7px}
+button{cursor:pointer}button:focus-visible,select:focus-visible{outline:2px solid #7dd3fc}
+section{padding:18px 24px}#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(330px,100%),1fr));gap:10px}
+.tile{background:var(--panel);border:1px solid #40536a;border-radius:8px;overflow:hidden;text-align:left;padding:0;width:100%}
+.tile.placeholder{min-height:150px;padding:18px;display:flex;flex-direction:column;justify-content:center;gap:8px;color:var(--muted)}
+.tile video,.tile img{width:100%;aspect-ratio:4/3;object-fit:contain;background:#05080d;display:block;pointer-events:none}
+.tile .label{padding:8px 10px 2px;font-weight:600}.tile .meta{padding:0 10px 9px;color:var(--muted);font-size:12px}
+details{margin:0 24px 18px;background:var(--panel);border-radius:8px;padding:12px}summary{cursor:pointer;font-weight:600}
+.atlases{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(360px,100%),1fr));gap:12px}.atlases figure{margin:0}.atlases img{display:block;width:100%;border-radius:5px}.atlases figcaption{padding:5px;color:var(--muted)}
+dialog{width:min(100vw,1100px);height:min(100dvh,850px);max-width:none;max-height:none;border:0;border-radius:8px;background:#080d15;color:var(--text)}
+dialog::backdrop{background:#000c}.viewer{height:100%;display:flex;flex-direction:column;gap:8px}.viewer header{padding:0;display:flex;justify-content:space-between}.viewer video{min-height:0;flex:1;width:100%;object-fit:contain}
+@media(max-width:700px){header,section,.summary,.controls{padding-inline:12px}}
+</style></head><body>
+<header><h1>Robot task and variation index</h1><p>Available task videos and variation previews. Nominal videos show measured contact force arrows and torque arcs from the approved replay. Counts describe indexed previews, not the size of the production dataset.</p>
+<nav class="links"><span id="released"></span></nav></header>
+<div class="summary" id="stats"></div>
+<div class="controls"><label>Task <select id="task"><option value="">All tasks</option></select></label><label>Release status <select id="releaseStatus"><option value="">All</option><option value="released">Released</option><option value="unreleased">Unreleased</option></select></label><label>Axis <select id="axis"><option value="nominal" selected>Nominal</option><option value="joint">Joint</option><option value="spatial">Spatial</option><option value="geometry">Geometry</option><option value="appearance">Appearance</option></select></label><button id="play">Pause visible</button><span id="count"></span></div>
+<section><h2>Previews</h2><div id="grid"></div><p id="empty" hidden>No previews match these filters.</p></section>
+<dialog id="expanded"><div class="viewer"><header><strong id="expandedTitle"></strong><button id="close">Close</button></header><video id="player" controls playsinline></video><img id="photo" hidden style="max-width:100%;max-height:75vh;object-fit:contain" alt="Expanded asset appearance"><p id="caption"></p></div></dialog>
+<script>
+const $=id=>document.getElementById(id);let catalog,playing=true,observer;
+function options(id,values){const select=$(id);for(const value of [...new Set(values)].sort()){const option=document.createElement('option');option.value=value;option.textContent=value.replaceAll('_',' ');select.append(option)}}
+function summary(){
+ $('stats').innerHTML='<div class="stat"><b>'+catalog.tasks.length+'</b>tasks</div><div class="stat"><b>'+catalog.clips.length+'</b>preview items</div><div class="stat"><b>'+Object.keys(catalog.axis_counts).length+'</b>indexed axes</div>';
+ $('released').replaceChildren();for(const item of catalog.released||[]){const a=document.createElement('a');a.href=item.release_review;a.textContent=item.task.replaceAll('_',' ')+' release';$('released').append(a);if(item.appearance_review){const b=document.createElement('a');b.href=item.appearance_review;b.textContent=item.task.replaceAll('_',' ')+' materials';$('released').append(b)}}
+ options('task',catalog.tasks.map(t=>t.task));
+}
+function spread(items){const chosen=[],remaining=items.map((_,i)=>i);while(remaining.length){const index=chosen.length?remaining.reduce((best,i)=>Math.min(...chosen.map(j=>Math.abs(i-j)))>Math.min(...chosen.map(j=>Math.abs(best-j)))?i:best):0;chosen.push(index);remaining.splice(remaining.indexOf(index),1)}return chosen.map(i=>items[i])}
+function representative(rows,limit,groupBy){
+ if(rows.length && rows.every(row=>Number.isInteger(row.review_rank))){
+  return rows.slice().sort((a,b)=>a.review_rank-b.review_rank).slice(0,limit)
+ }
+ const groups=new Map();for(const row of rows){const key=row[groupBy]||row.axis;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(row)}
+ const priority=['wrench','nominal','joint','spatial','geometry','appearance','reference','example','table','wall','room','lighting','asset','diagnostic'];
+ const keys=[...groups.keys()].sort((a,b)=>priority.indexOf(a)-priority.indexOf(b));
+ const queues=keys.map(key=>spread(groups.get(key).slice().sort((a,b)=>(a.media_type==='image')-(b.media_type==='image'))));
+ const chosen=[];while(chosen.length<limit&&queues.some(q=>q.length)){for(const queue of queues){if(queue.length)chosen.push(queue.shift());if(chosen.length===limit)break}}
+ return chosen;
+}
+function render(){
+ if(observer)observer.disconnect();const statusByTask=new Map(catalog.tasks.map(t=>[t.task,t.release_status]));const rows=catalog.clips.filter(c=>(!$('task').value||c.task===$('task').value)&&(!$('releaseStatus').value||statusByTask.get(c.task)===$('releaseStatus').value)&&(!$('axis').value||c.axis===$('axis').value));
+ const limit=!$('task').value&&$('axis').value==='nominal'?1:($('task').value?9:4);
+ const selected=$('task').value?representative(rows,limit,'source_axis'):[...new Set(rows.map(c=>c.task))].sort().flatMap(task=>representative(rows.filter(c=>c.task===task),limit,'source_axis'));
+ const missing=catalog.tasks.filter(t=>(!$('task').value||t.task===$('task').value)&&(!$('releaseStatus').value||t.release_status===$('releaseStatus').value)&&!rows.some(c=>c.task===t.task));
+ $('count').textContent=selected.length+' current videos shown'+(missing.length?' · '+missing.length+' tasks awaiting current video':'');$('empty').hidden=selected.length>0||missing.length>0;$('empty').textContent=($('axis').value==='spatial'||$('axis').value==='geometry')?'No current variation video exists for this task yet.':'No current videos match these filters.';const grid=$('grid');grid.replaceChildren();
+ for(const c of selected){const tile=document.createElement('button');tile.className='tile';tile.type='button';
+  const media=c.media_type==='image'?document.createElement('img'):document.createElement('video');if(c.media_type==='image'){media.src=c.src;media.alt=c.quality}else{media.muted=true;media.loop=true;media.playsInline=true;media.preload='none';media.dataset.src=c.src}
+  const label=document.createElement('div');label.className='label';label.textContent=c.task.replaceAll('_',' ');
+  const meta=document.createElement('div');meta.className='meta';meta.textContent=[c.cohort,c.axis,c.quality!=='unknown'?c.quality:null,c.outcome].filter(Boolean).join(' · ');
+  tile.append(media,label,meta);tile.onclick=()=>expand(c);grid.append(tile)}
+ for(const t of missing){const tile=document.createElement('div');tile.className='tile placeholder';const name=document.createElement('strong');name.textContent=t.task.replaceAll('_',' ');const note=document.createElement('span');note.textContent='Current video unavailable';tile.append(name,note);grid.append(tile)}
+ observer=new IntersectionObserver(entries=>{for(const e of entries){const v=e.target;if(e.isIntersecting){if(!v.src)v.src=v.dataset.src;if(playing)v.play().catch(()=>{})}else v.pause()}},{rootMargin:'150px'});
+ grid.querySelectorAll('video').forEach(v=>observer.observe(v));
+}
+function expand(c){$('expandedTitle').textContent=c.task.replaceAll('_',' ');$('caption').textContent=[c.cohort,c.axis,c.lighting,c.quality,c.outcome].filter(x=>x&&x!=='unknown').join(' · ');$('player').hidden=c.media_type==='image';$('photo').hidden=c.media_type!=='image';if(c.media_type==='image')$('photo').src=c.src;else $('player').src=c.src;$('expanded').showModal();if(c.media_type!=='image')$('player').play().catch(()=>{})}
+$('close').onclick=()=>$('expanded').close();$('expanded').onclose=()=>{$('player').pause();$('player').removeAttribute('src');$('player').load();$('photo').removeAttribute('src')};
+for(const k of ['task','releaseStatus','axis'])$(k).onchange=render;
+$('play').onclick=()=>{playing=!playing;$('play').textContent=playing?'Pause visible':'Play visible';document.querySelectorAll('.tile video').forEach(v=>{if(playing&&v.src&&v.getBoundingClientRect().bottom>0&&v.getBoundingClientRect().top<innerHeight)v.play().catch(()=>{});else v.pause()})};
+fetch('catalog.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error('Catalog HTTP '+r.status);return r.json()}).then(data=>{catalog=data;summary();render()}).catch(e=>{$('count').textContent=e.message});
+</script></body></html>
