@@ -23,7 +23,7 @@ dialog::backdrop{background:#000c}.viewer{height:100%;display:flex;flex-directio
 @media(max-width:700px){header,section,.summary,.controls{padding-inline:12px}}
 </style></head><body>
 <header><h1>Robot task and variation index</h1><p>Available task videos and variation previews. Nominal shows measured contact force arrows and torque arcs. Joint combines task variation with table, background, lighting, camera and robot world position. Appearance varies task materials on fixed motion. Counts describe previews, not production dataset size.</p>
-<nav class="links"><span id="released"></span></nav></header>
+<nav class="links"><a href="viewer.html">3D scene, appearance and pose viewer</a><span id="released"></span></nav></header>
 <div class="summary" id="stats"></div>
 <div class="controls"><label>Task <select id="task"><option value="">All tasks</option></select></label><label>Release status <select id="releaseStatus"><option value="">All</option><option value="released">Released</option><option value="unreleased">Unreleased</option></select></label><label>Axis <select id="axis"><option value="nominal" selected>Nominal</option><option value="joint">Joint</option><option value="spatial">Spatial</option><option value="geometry">Geometry</option><option value="appearance">Appearance</option></select></label><button id="play">Pause visible</button><span id="count"></span></div>
 <section><h2>Previews</h2><div id="grid"></div><p id="empty" hidden>No previews match these filters.</p></section>
