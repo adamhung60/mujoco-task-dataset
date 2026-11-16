@@ -1,0 +1,622 @@
+{
+  "near30_m5_m5": {
+    "task": "round_insert",
+    "seed": 2026111600,
+    "pose": {
+      "camera.azimuth_deg": -20,
+      "camera.elevation_deg": 50,
+      "camera.distance_m": 0.3,
+      "camera.fovy_deg": 45,
+      "camera.roll_deg": 0,
+      "robot.mount_x_m": 0.02,
+      "robot.mount_y_m": 0.015,
+      "robot.mount_z_m": 0.02,
+      "robot.mount_yaw_deg": 6,
+      "robot.home_joint1_offset_deg": 0.2
+    },
+    "camera_target_shift_xy_m": [
+      -0.05,
+      -0.05
+    ],
+    "cart_setback_m": 0.05,
+    "qualification": {
+      "expert_success": true,
+      "physical": {
+        "passed": true,
+        "checks": {
+          "lateral_within_mating_clearance": true,
+          "fully_seated_depth": true,
+          "section_orientation": true,
+          "receiver_floor_support": true,
+          "released_from_robot": true,
+          "no_table_support_outside_receiver": true,
+          "released_stability": true,
+          "settled_reset": true
+        },
+        "lateral_offset_mm": 0.10102405754433685,
+        "axial_offset_mm": 0.0023201813442660923,
+        "section_orientation_deg": 0.005747006639023526,
+        "clearance_per_side_mm": 2.229721107473512,
+        "contact": {
+          "receiver_floor": true,
+          "table": false,
+          "robot": false
+        }
+      },
+      "motion_flags": [],
+      "replay_qpos_error": 0,
+      "reset": {
+        "passed": true,
+        "robot_table_minimum_m": 0.03999999999999998,
+        "robot_penetrations": [],
+        "cart_table_penetrations": []
+      },
+      "frames": 139
+    },
+    "brightness": [
+      212.1821141098485,
+      194.9837313565341,
+      177.06474720348012
+    ],
+    "video": "near30_m5_m5.mp4",
+    "size_bytes": 176644
+  },
+  "near30_m5_p5": {
+    "task": "round_insert",
+    "seed": 2026111600,
+    "pose": {
+      "camera.azimuth_deg": -20,
+      "camera.elevation_deg": 50,
+      "camera.distance_m": 0.3,
+      "camera.fovy_deg": 45,
+      "camera.roll_deg": 0,
+      "robot.mount_x_m": 0.02,
+      "robot.mount_y_m": 0.015,
+      "robot.mount_z_m": 0.02,
+      "robot.mount_yaw_deg": 6,
+      "robot.home_joint1_offset_deg": 0.2
+    },
+    "camera_target_shift_xy_m": [
+      -0.05,
+      0.05
+    ],
+    "cart_setback_m": 0.05,
+    "qualification": {
+      "expert_success": true,
+      "physical": {
+        "passed": true,
+        "checks": {
+          "lateral_within_mating_clearance": true,
+          "fully_seated_depth": true,
+          "section_orientation": true,
+          "receiver_floor_support": true,
+          "released_from_robot": true,
+          "no_table_support_outside_receiver": true,
+          "released_stability": true,
+          "settled_reset": true
+        },
+        "lateral_offset_mm": 0.10102405754433685,
+        "axial_offset_mm": 0.0023201813442660923,
+        "section_orientation_deg": 0.005747006639023526,
+        "clearance_per_side_mm": 2.229721107473512,
+        "contact": {
+          "receiver_floor": true,
+          "table": false,
+          "robot": false
+        }
+      },
+      "motion_flags": [],
+      "replay_qpos_error": 0,
+      "reset": {
+        "passed": true,
+        "robot_table_minimum_m": 0.03999999999999998,
+        "robot_penetrations": [],
+        "cart_table_penetrations": []
+      },
+      "frames": 139
+    },
+    "brightness": [
+      213.32109301017994,
+      192.88232051964962,
+      197.9990419330019
+    ],
+    "video": "near30_m5_p5.mp4",
+    "size_bytes": 167362
+  },
+  "near30_p5_m5": {
+    "task": "round_insert",
+    "seed": 2026111600,
+    "pose": {
+      "camera.azimuth_deg": -20,
+      "camera.elevation_deg": 50,
+      "camera.distance_m": 0.3,
+      "camera.fovy_deg": 45,
+      "camera.roll_deg": 0,
+      "robot.mount_x_m": 0.02,
+      "robot.mount_y_m": 0.015,
+      "robot.mount_z_m": 0.02,
+      "robot.mount_yaw_deg": 6,
+      "robot.home_joint1_offset_deg": 0.2
+    },
+    "camera_target_shift_xy_m": [
+      0.05,
+      -0.05
+    ],
+    "cart_setback_m": 0.05,
+    "qualification": {
+      "expert_success": true,
+      "physical": {
+        "passed": true,
+        "checks": {
+          "lateral_within_mating_clearance": true,
+          "fully_seated_depth": true,
+          "section_orientation": true,
+          "receiver_floor_support": true,
+          "released_from_robot": true,
+          "no_table_support_outside_receiver": true,
+          "released_stability": true,
+          "settled_reset": true
+        },
+        "lateral_offset_mm": 0.10102405754433685,
+        "axial_offset_mm": 0.0023201813442660923,
+        "section_orientation_deg": 0.005747006639023526,
+        "clearance_per_side_mm": 2.229721107473512,
+        "contact": {
+          "receiver_floor": true,
+          "table": false,
+          "robot": false
+        }
+      },
+      "motion_flags": [],
+      "replay_qpos_error": 0,
+      "reset": {
+        "passed": true,
+        "robot_table_minimum_m": 0.03999999999999998,
+        "robot_penetrations": [],
+        "cart_table_penetrations": []
+      },
+      "frames": 139
+    },
+    "brightness": [
+      233.33084013967803,
+      229.75109493371212,
+      227.58613910097066
+    ],
+    "video": "near30_p5_m5.mp4",
+    "size_bytes": 103412
+  },
+  "near30_p5_p5": {
+    "task": "round_insert",
+    "seed": 2026111600,
+    "pose": {
+      "camera.azimuth_deg": -20,
+      "camera.elevation_deg": 50,
+      "camera.distance_m": 0.3,
+      "camera.fovy_deg": 45,
+      "camera.roll_deg": 0,
+      "robot.mount_x_m": 0.02,
+      "robot.mount_y_m": 0.015,
+      "robot.mount_z_m": 0.02,
+      "robot.mount_yaw_deg": 6,
+      "robot.home_joint1_offset_deg": 0.2
+    },
+    "camera_target_shift_xy_m": [
+      0.05,
+      0.05
+    ],
+    "cart_setback_m": 0.05,
+    "qualification": {
+      "expert_success": true,
+      "physical": {
+        "passed": true,
+        "checks": {
+          "lateral_within_mating_clearance": true,
+          "fully_seated_depth": true,
+          "section_orientation": true,
+          "receiver_floor_support": true,
+          "released_from_robot": true,
+          "no_table_support_outside_receiver": true,
+          "released_stability": true,
+          "settled_reset": true
+        },
+        "lateral_offset_mm": 0.10102405754433685,
+        "axial_offset_mm": 0.0023201813442660923,
+        "section_orientation_deg": 0.005747006639023526,
+        "clearance_per_side_mm": 2.229721107473512,
+        "contact": {
+          "receiver_floor": true,
+          "table": false,
+          "robot": false
+        }
+      },
+      "motion_flags": [],
+      "replay_qpos_error": 0,
+      "reset": {
+        "passed": true,
+        "robot_table_minimum_m": 0.03999999999999998,
+        "robot_penetrations": [],
+        "cart_table_penetrations": []
+      },
+      "frames": 139
+    },
+    "brightness": [
+      230.54993600556344,
+      224.20814098011363,
+      226.71501020951703
+    ],
+    "video": "near30_p5_p5.mp4",
+    "size_bytes": 117635
+  },
+  "far50_m5_m5": {
+    "task": "round_insert",
+    "seed": 2026111600,
+    "pose": {
+      "camera.azimuth_deg": -20,
+      "camera.elevation_deg": 50,
+      "camera.distance_m": 0.5,
+      "camera.fovy_deg": 45,
+      "camera.roll_deg": 0,
+      "robot.mount_x_m": 0.02,
+      "robot.mount_y_m": 0.015,
+      "robot.mount_z_m": 0.02,
+      "robot.mount_yaw_deg": 6,
+      "robot.home_joint1_offset_deg": 0.2
+    },
+    "camera_target_shift_xy_m": [
+      -0.05,
+      -0.05
+    ],
+    "cart_setback_m": 0.05,
+    "qualification": {
+      "expert_success": true,
+      "physical": {
+        "passed": true,
+        "checks": {
+          "lateral_within_mating_clearance": true,
+          "fully_seated_depth": true,
+          "section_orientation": true,
+          "receiver_floor_support": true,
+          "released_from_robot": true,
+          "no_table_support_outside_receiver": true,
+          "released_stability": true,
+          "settled_reset": true
+        },
+        "lateral_offset_mm": 0.10102405754433685,
+        "axial_offset_mm": 0.0023201813442660923,
+        "section_orientation_deg": 0.005747006639023526,
+        "clearance_per_side_mm": 2.229721107473512,
+        "contact": {
+          "receiver_floor": true,
+          "table": false,
+          "robot": false
+        }
+      },
+      "motion_flags": [],
+      "replay_qpos_error": 0,
+      "reset": {
+        "passed": true,
+        "robot_table_minimum_m": 0.03999999999999998,
+        "robot_penetrations": [],
+        "cart_table_penetrations": []
+      },
+      "frames": 139
+    },
+    "brightness": [
+      222.54951615767047,
+      217.09367601799244,
+      212.4497606682055
+    ],
+    "video": "far50_m5_m5.mp4",
+    "size_bytes": 118127
+  },
+  "far50_m5_p5": {
+    "task": "round_insert",
+    "seed": 2026111600,
+    "pose": {
+      "camera.azimuth_deg": -20,
+      "camera.elevation_deg": 50,
+      "camera.distance_m": 0.5,
+      "camera.fovy_deg": 45,
+      "camera.roll_deg": 0,
+      "robot.mount_x_m": 0.02,
+      "robot.mount_y_m": 0.015,
+      "robot.mount_z_m": 0.02,
+      "robot.mount_yaw_deg": 6,
+      "robot.home_joint1_offset_deg": 0.2
+    },
+    "camera_target_shift_xy_m": [
+      -0.05,
+      0.05
+    ],
+    "cart_setback_m": 0.05,
+    "qualification": {
+      "expert_success": true,
+      "physical": {
+        "passed": true,
+        "checks": {
+          "lateral_within_mating_clearance": true,
+          "fully_seated_depth": true,
+          "section_orientation": true,
+          "receiver_floor_support": true,
+          "released_from_robot": true,
+          "no_table_support_outside_receiver": true,
+          "released_stability": true,
+          "settled_reset": true
+        },
+        "lateral_offset_mm": 0.10102405754433685,
+        "axial_offset_mm": 0.0023201813442660923,
+        "section_orientation_deg": 0.005747006639023526,
+        "clearance_per_side_mm": 2.229721107473512,
+        "contact": {
+          "receiver_floor": true,
+          "table": false,
+          "robot": false
+        }
+      },
+      "motion_flags": [],
+      "replay_qpos_error": 0,
+      "reset": {
+        "passed": true,
+        "robot_table_minimum_m": 0.03999999999999998,
+        "robot_penetrations": [],
+        "cart_table_penetrations": []
+      },
+      "frames": 139
+    },
+    "brightness": [
+      219.7450968424479,
+      209.81339888139203,
+      207.58458547881156
+    ],
+    "video": "far50_m5_p5.mp4",
+    "size_bytes": 147007
+  },
+  "far50_p5_m5": {
+    "task": "round_insert",
+    "seed": 2026111600,
+    "pose": {
+      "camera.azimuth_deg": -20,
+      "camera.elevation_deg": 50,
+      "camera.distance_m": 0.5,
+      "camera.fovy_deg": 45,
+      "camera.roll_deg": 0,
+      "robot.mount_x_m": 0.02,
+      "robot.mount_y_m": 0.015,
+      "robot.mount_z_m": 0.02,
+      "robot.mount_yaw_deg": 6,
+      "robot.home_joint1_offset_deg": 0.2
+    },
+    "camera_target_shift_xy_m": [
+      0.05,
+      -0.05
+    ],
+    "cart_setback_m": 0.05,
+    "qualification": {
+      "expert_success": true,
+      "physical": {
+        "passed": true,
+        "checks": {
+          "lateral_within_mating_clearance": true,
+          "fully_seated_depth": true,
+          "section_orientation": true,
+          "receiver_floor_support": true,
+          "released_from_robot": true,
+          "no_table_support_outside_receiver": true,
+          "released_stability": true,
+          "settled_reset": true
+        },
+        "lateral_offset_mm": 0.10102405754433685,
+        "axial_offset_mm": 0.0023201813442660923,
+        "section_orientation_deg": 0.005747006639023526,
+        "clearance_per_side_mm": 2.229721107473512,
+        "contact": {
+          "receiver_floor": true,
+          "table": false,
+          "robot": false
+        }
+      },
+      "motion_flags": [],
+      "replay_qpos_error": 0,
+      "reset": {
+        "passed": true,
+        "robot_table_minimum_m": 0.03999999999999998,
+        "robot_penetrations": [],
+        "cart_table_penetrations": []
+      },
+      "frames": 139
+    },
+    "brightness": [
+      232.6007080078125,
+      230.1173650568182,
+      228.1150771632339
+    ],
+    "video": "far50_p5_m5.mp4",
+    "size_bytes": 89515
+  },
+  "far50_p5_p5": {
+    "task": "round_insert",
+    "seed": 2026111600,
+    "pose": {
+      "camera.azimuth_deg": -20,
+      "camera.elevation_deg": 50,
+      "camera.distance_m": 0.5,
+      "camera.fovy_deg": 45,
+      "camera.roll_deg": 0,
+      "robot.mount_x_m": 0.02,
+      "robot.mount_y_m": 0.015,
+      "robot.mount_z_m": 0.02,
+      "robot.mount_yaw_deg": 6,
+      "robot.home_joint1_offset_deg": 0.2
+    },
+    "camera_target_shift_xy_m": [
+      0.05,
+      0.05
+    ],
+    "cart_setback_m": 0.05,
+    "qualification": {
+      "expert_success": true,
+      "physical": {
+        "passed": true,
+        "checks": {
+          "lateral_within_mating_clearance": true,
+          "fully_seated_depth": true,
+          "section_orientation": true,
+          "receiver_floor_support": true,
+          "released_from_robot": true,
+          "no_table_support_outside_receiver": true,
+          "released_stability": true,
+          "settled_reset": true
+        },
+        "lateral_offset_mm": 0.10102405754433685,
+        "axial_offset_mm": 0.0023201813442660923,
+        "section_orientation_deg": 0.005747006639023526,
+        "clearance_per_side_mm": 2.229721107473512,
+        "contact": {
+          "receiver_floor": true,
+          "table": false,
+          "robot": false
+        }
+      },
+      "motion_flags": [],
+      "replay_qpos_error": 0,
+      "reset": {
+        "passed": true,
+        "robot_table_minimum_m": 0.03999999999999998,
+        "robot_penetrations": [],
+        "cart_table_penetrations": []
+      },
+      "frames": 139
+    },
+    "brightness": [
+      230.14149613813922,
+      225.28033262310606,
+      223.5110899029356
+    ],
+    "video": "far50_p5_p5.mp4",
+    "size_bytes": 111878
+  },
+  "robot_z_plus12": {
+    "task": "round_insert",
+    "seed": 2026111600,
+    "pose": {
+      "camera.azimuth_deg": -20,
+      "camera.elevation_deg": 50,
+      "camera.distance_m": 0.4,
+      "camera.fovy_deg": 45,
+      "camera.roll_deg": 0,
+      "robot.mount_x_m": 0.02,
+      "robot.mount_y_m": 0.015,
+      "robot.mount_z_m": 0.12,
+      "robot.mount_yaw_deg": 6,
+      "robot.home_joint1_offset_deg": 0.2
+    },
+    "camera_target_shift_xy_m": [
+      0.0,
+      0.0
+    ],
+    "cart_setback_m": 0.05,
+    "qualification": {
+      "expert_success": true,
+      "physical": {
+        "passed": true,
+        "checks": {
+          "lateral_within_mating_clearance": true,
+          "fully_seated_depth": true,
+          "section_orientation": true,
+          "receiver_floor_support": true,
+          "released_from_robot": true,
+          "no_table_support_outside_receiver": true,
+          "released_stability": true,
+          "settled_reset": true
+        },
+        "lateral_offset_mm": 2.2493743693209294,
+        "axial_offset_mm": 0.002311517092214166,
+        "section_orientation_deg": 0.0316911578727853,
+        "clearance_per_side_mm": 2.229721107473512,
+        "contact": {
+          "receiver_floor": true,
+          "table": false,
+          "robot": false
+        }
+      },
+      "motion_flags": [],
+      "replay_qpos_error": 0,
+      "reset": {
+        "passed": true,
+        "robot_table_minimum_m": 0.05,
+        "robot_penetrations": [],
+        "cart_table_penetrations": []
+      },
+      "frames": 174
+    },
+    "brightness": [
+      219.2577237215909,
+      194.0244270093513,
+      200.21895714962122
+    ],
+    "video": "robot_z_plus12.mp4",
+    "size_bytes": 173855
+  },
+  "joint_far_plus_plus": {
+    "task": "round_insert",
+    "seed": 2026111600,
+    "pose": {
+      "camera.azimuth_deg": -20,
+      "camera.elevation_deg": 50,
+      "camera.distance_m": 0.5,
+      "camera.fovy_deg": 45,
+      "camera.roll_deg": 0,
+      "robot.mount_x_m": 0.02,
+      "robot.mount_y_m": 0.015,
+      "robot.mount_z_m": 0.12,
+      "robot.mount_yaw_deg": 6,
+      "robot.home_joint1_offset_deg": 0.2
+    },
+    "camera_target_shift_xy_m": [
+      0.05,
+      0.05
+    ],
+    "cart_setback_m": 0.05,
+    "qualification": {
+      "expert_success": true,
+      "physical": {
+        "passed": true,
+        "checks": {
+          "lateral_within_mating_clearance": true,
+          "fully_seated_depth": true,
+          "section_orientation": true,
+          "receiver_floor_support": true,
+          "released_from_robot": true,
+          "no_table_support_outside_receiver": true,
+          "released_stability": true,
+          "settled_reset": true
+        },
+        "lateral_offset_mm": 2.2493743693209294,
+        "axial_offset_mm": 0.002311517092214166,
+        "section_orientation_deg": 0.0316911578727853,
+        "clearance_per_side_mm": 2.229721107473512,
+        "contact": {
+          "receiver_floor": true,
+          "table": false,
+          "robot": false
+        }
+      },
+      "motion_flags": [],
+      "replay_qpos_error": 0,
+      "reset": {
+        "passed": true,
+        "robot_table_minimum_m": 0.05,
+        "robot_penetrations": [],
+        "cart_table_penetrations": []
+      },
+      "frames": 174
+    },
+    "brightness": [
+      224.49015299479166,
+      212.25567441998106,
+      214.57046601266572
+    ],
+    "video": "joint_far_plus_plus.mp4",
+    "size_bytes": 145880
+  }
+}

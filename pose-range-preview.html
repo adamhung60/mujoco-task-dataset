@@ -15,11 +15,16 @@
 #pose-range-preview video{display:block;width:100%;max-height:260px;background:var(--muted)}
 #pose-range-preview .pose-detail{min-height:2.5em}
 #pose-range-preview .form-select{max-width:100%}
+#pose-range-preview .extreme-videos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:calc(var(--font-size-base)*1.2)}
+#pose-range-preview .extreme-videos section{background:#1a2635;border:1px solid #40536a;border-radius:8px;padding:14px}
+#pose-range-preview .extreme-videos h3{font-size:15px}
+#pose-range-preview .extreme-videos video{max-height:none}
 @media(max-width:700px){#pose-range-preview .pose-panels,#pose-range-preview .pose-videos{grid-template-columns:1fr}#pose-range-preview canvas{height:290px}}
+@media(max-width:700px){#pose-range-preview .extreme-videos{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-<header><a href="viewer.html">← 3D task viewer</a> · <a href="index.html">Video gallery</a><h1>Proposed camera and robot pose ranges</h1><p class="eyebrow">Preview for review · no production collection yet</p><p class="intro">Compare the current sampling ranges with a wider candidate, then inspect a fresh Round Insert rollout at each range.</p></header>
+<header><a href="viewer.html">← 3D task viewer</a> · <a href="index.html">Video gallery</a><h1>Proposed camera and robot pose ranges</h1><p class="eyebrow">Preview for review · no production collection yet</p><p class="intro">Compare the current sampling ranges with a wider candidate, then inspect fresh Round Insert rollouts at the pose extremes.</p></header>
 <main>
 <div id="pose-range-preview">
 
@@ -34,7 +39,7 @@
     </section>
     <section>
       <h3>Candidate</h3>
-      <p class="text-small">Camera distance 30–46 cm · target XY ±2 cm · robot mount Z −3 to +5 cm</p>
+      <p class="text-small">Camera distance 30–50 cm · target XY ±5 cm · robot mount Z −3 to +12 cm</p>
       <canvas id="pose-after" role="img" aria-label="Rotatable 3D view of proposed camera and robot pose samples"></canvas>
       <label class="form-label" for="pick-after">Inspect pose</label>
       <select class="form-select" id="pick-after"></select>
@@ -48,11 +53,25 @@
       <video id="video-before" controls muted playsinline preload="metadata" src="pose-range-preview-media/round-insert-before.mp4"></video>
     </section>
     <section>
-      <h3>Round Insert · candidate</h3>
-      <video id="video-after" controls muted playsinline preload="metadata" src="pose-range-preview-media/round-insert-after.mp4"></video>
+      <h3>Round Insert · robot mount +12 cm</h3>
+      <video id="video-after" controls muted playsinline preload="metadata" src="pose-range-preview-media/robot_z_plus12.mp4"></video>
     </section>
   </div>
-  <p class="text-small">Both shown rollouts use a fresh passing expert on one task seed. The candidate uses a +5 cm mount and a 46 cm camera distance. A +6 cm mount hit the cart/table at reset in this task, so the proposed cap is +5 cm.</p>
+  <p class="text-small">The +12 cm robot mount has a fresh passing physical rollout with the cart set back 5 cm and its mount plate kept under the arm. +13 cm passed this pilot seed; +13.5 cm and above failed the current grasp planner. The proposed +12 cm cap leaves a small margin and is not task-wide qualification.</p>
+  <h2>Camera distance and aim extremes</h2>
+  <p class="text-small">The same passing physical rollout is rendered at both distance endpoints and all four ±5 cm aim corners. The 30 cm views with positive Y aim shifts crop the task objects in this example. These remain visible here for review.</p>
+  <div class="extreme-videos">
+    <section><h3>30 cm · aim −5, −5 cm</h3><video controls muted playsinline preload="metadata" src="pose-range-preview-media/near30_m5_m5.mp4"></video></section>
+    <section><h3>30 cm · aim −5, +5 cm</h3><video controls muted playsinline preload="metadata" src="pose-range-preview-media/near30_m5_p5.mp4"></video></section>
+    <section><h3>30 cm · aim +5, −5 cm</h3><video controls muted playsinline preload="metadata" src="pose-range-preview-media/near30_p5_m5.mp4"></video></section>
+    <section><h3>30 cm · aim +5, +5 cm</h3><video controls muted playsinline preload="metadata" src="pose-range-preview-media/near30_p5_p5.mp4"></video></section>
+    <section><h3>50 cm · aim −5, −5 cm</h3><video controls muted playsinline preload="metadata" src="pose-range-preview-media/far50_m5_m5.mp4"></video></section>
+    <section><h3>50 cm · aim −5, +5 cm</h3><video controls muted playsinline preload="metadata" src="pose-range-preview-media/far50_m5_p5.mp4"></video></section>
+    <section><h3>50 cm · aim +5, −5 cm</h3><video controls muted playsinline preload="metadata" src="pose-range-preview-media/far50_p5_m5.mp4"></video></section>
+    <section><h3>50 cm · aim +5, +5 cm</h3><video controls muted playsinline preload="metadata" src="pose-range-preview-media/far50_p5_p5.mp4"></video></section>
+  </div>
+  <h2>Combined robot and camera extreme</h2>
+  <div class="pose-videos"><section><h3>Mount +12 cm · camera 50 cm · aim +5, +5 cm</h3><video controls muted playsinline preload="metadata" src="pose-range-preview-media/joint_far_plus_plus.mp4"></video></section></div>
   </div>
 <p id="preview-status" role="status">Loading pose samples…</p>
 </main>
