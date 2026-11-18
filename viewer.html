@@ -8,10 +8,10 @@
 </style>
 </head>
 <body>
-<header><a href="index.html">← Video gallery</a><h1>3D task viewer</h1><p>Explore the original full camera and robot pose distribution or the current released Joint previews, then inspect a selected scene at three saved poses.</p></header>
+<header><a href="index.html">← Video gallery</a><h1>3D task viewer</h1><p>Explore camera and robot poses from physical Joint rollouts, then inspect a selected demo at three saved poses.</p></header>
 <div class="controls">
 <label>View <select id="view"><option value="distribution">Pose distribution</option><option value="single">Selected demo</option></select></label>
-<label id="poseSetLabel">Pose set <select id="poseSet"><option value="original">Original full distribution</option><option value="released">Current released previews</option></select></label>
+<label id="poseSetLabel">Pose set <select id="poseSet"><option value="released">Physical Joint previews</option><option value="original">Historical pose samples</option></select></label>
 <label>Task <select id="taskFilter"><option value="">All tasks</option></select></label>
 <label id="cameraChoiceLabel">Camera sample <select id="cameraChoice"></select></label>
 <label id="robotChoiceLabel">Robot sample <select id="robotChoice"></select></label>
@@ -52,11 +52,25 @@ function distributionFrame(){const current=episode?.frames[0];if(!current||$('po
 function posePoint(t){return world(t,[0,0,0])}
 function bounds(points){return [0,1,2].map(i=>[Math.min(...points.map(p=>p[i])),Math.max(...points.map(p=>p[i]))])}
 function distributionRanges(){
- const data=poseRows(),original=$('poseSet').value==='original',source=original?'original local pose samples':'current released Joint previews';
+ const data=poseRows(),original=$('poseSet').value==='original',source=original?'historical pose samples':'physical Joint previews';
+ $('legend').textContent='';
  if(!data.length){$('ranges').textContent=`No ${source} for this task. Choose another task or pose set.`;return}
- const c=bounds(data.map(e=>posePoint(e.camera))),r=bounds(data.map(e=>posePoint(e.robot_base))),fmt=b=>b.map(x=>`${(x[0]*100).toFixed(0)}–${(x[1]*100).toFixed(0)}`).join(', ');
- $('ranges').textContent=`${data.length} ${source} · ${new Set(data.map(e=>e.task)).size} tasks · camera XYZ: ${fmt(c)} cm · robot base XYZ: ${fmt(r)} cm · showing ${displayedPoses.camera.length} cameras and ${displayedPoses.robot.length} robot bases`;
- $('legend').textContent=original?'Original local dashboard coverage, shown with farthest point sampling. Camera and robot selections are independent visual inspections; the current preview video does not change.':'Markers are fresh physical expert rollouts sampled independently across the approved pose ranges. Click one to inspect its video.'
+ const summary=`${data.length} ${source} across ${new Set(data.map(e=>e.task)).size} tasks · showing ${displayedPoses.camera.length} cameras and ${displayedPoses.robot.length} robot bases`;
+ if(original){
+  const c=bounds(data.map(e=>posePoint(e.camera))),r=bounds(data.map(e=>posePoint(e.robot_base))),fmt=b=>b.map(x=>`${(x[0]*100).toFixed(0)}–${(x[1]*100).toFixed(0)}`).join(', ');
+  $('ranges').textContent=`${summary} · camera XYZ ${fmt(c)} cm · robot base XYZ ${fmt(r)} cm`;
+  $('legend').textContent='Historical design samples. Select camera and robot poses independently while the reference video plays.';
+  return
+ }
+ const range=(axis,signed=false)=>{
+  const values=data.map(row=>row.episode.variation?.sampled_axes?.[axis]).filter(Number.isFinite);
+  if(!values.length)return null;
+  const cm=value=>`${signed&&value>0?'+':''}${(value*100).toFixed(2)}`;
+  return `${cm(Math.min(...values))} to ${cm(Math.max(...values))} cm`
+ };
+ const measured=[['Robot mount Z offset',range('robot.mount_z_m',true)],['Camera distance',range('camera.distance_m')],['Camera target X shift',range('camera.target_shift_x_m',true)],['Y shift',range('camera.target_shift_y_m',true)]];
+ $('ranges').textContent=summary;
+ $('legend').textContent=['Observed across these rollouts',...measured.filter(([,value])=>value).map(([label,value])=>`${label} ${value}`)].join(' · ')
 }
 function distributionVisible(item){
  if(item.kind==='room'||(item.kind==='task'&&!$('taskFilter').value))return false;
