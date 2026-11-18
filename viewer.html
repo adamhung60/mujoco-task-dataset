@@ -61,8 +61,15 @@ function distributionRanges(){
 function distributionVisible(item){
  if(item.kind==='room'||(item.kind==='task'&&!$('taskFilter').value))return false;
  if(item.kind==='robot')return $('showRobot').checked;
- if(item.kind==='table'){const b=payload.geometry[item.mesh].bounds;return $('showTable').checked&&Math.max(...b[1].map((x,i)=>x-b[0][i]))<1.5}
+ if(item.kind==='table')return $('showTable').checked;
  return true
+}
+function distributionFitIncludes(item){
+ if(!distributionVisible(item))return false;
+ if(item.kind!=='table')return true;
+ // Keep a large tabletop from shrinking the pose markers when fitting.
+ const [lo,hi]=payload.geometry[item.mesh].bounds;
+ return Math.max(...hi.map((value,i)=>value-lo[i]))<1.5;
 }
 function drawSelectedDistributionScene(rect,ratio){
  if(!episode)return;const current=distributionFrame(),{right,up,toward}=basis();
@@ -81,7 +88,7 @@ function drawDistribution(){
 }
 function fitDistribution(){
  updatePoseChoices();const data=poseRows(),points=data.flatMap(e=>[posePoint(e.camera),posePoint(e.robot_base)]);
- if(episode){for(const item of distributionFrame().geoms){if(!distributionVisible(item))continue;const b=payload.geometry[item.mesh].bounds;for(const x of [0,1])for(const y of [0,1])for(const z of [0,1])points.push(world(item.transform,[b[x][0],b[y][1],b[z][2]]))}}
+ if(episode){for(const item of distributionFrame().geoms){if(!distributionFitIncludes(item))continue;const b=payload.geometry[item.mesh].bounds;for(const x of [0,1])for(const y of [0,1])for(const z of [0,1])points.push(world(item.transform,[b[x][0],b[y][1],b[z][2]]))}}
  if(!points.length)return;const ranges=bounds(points);center=ranges.map(x=>(x[0]+x[1])/2);const {right,up}=basis(),xs=points.map(p=>dot(sub(p,center),right)),ys=points.map(p=>dot(sub(p,center),up));scale=Math.min(canvas.clientWidth*.78/Math.max(.25,Math.max(...xs)-Math.min(...xs)),canvas.clientHeight*.78/Math.max(.25,Math.max(...ys)-Math.min(...ys)));distributionRanges();drawDistribution()
 }
 function syncView(){
