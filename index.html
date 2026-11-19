@@ -22,8 +22,8 @@ dialog{width:min(100vw,1100px);height:min(100dvh,850px);max-width:none;max-heigh
 dialog::backdrop{background:#000c}.viewer{height:100%;display:flex;flex-direction:column;gap:8px}.viewer header{padding:0;display:flex;justify-content:space-between}.viewer video{min-height:0;flex:1;width:100%;object-fit:contain}
 @media(max-width:700px){header,section,.summary,.controls{padding-inline:12px}}
 </style></head><body>
-<header><h1>Robot task and variation index</h1><p>Available task videos and variation previews. Nominal shows measured contact force arrows and torque arcs. Joint combines task variation with table, background, lighting, camera and robot world position. Appearance varies task materials on fixed motion. Counts describe previews, not production dataset size.</p>
-<nav class="links"><a href="viewer.html">3D scene, appearance and pose viewer</a><span id="released"></span></nav></header>
+<header><h1>Robot task and variation index</h1><p>Available task videos and variation previews. Nominal shows measured contact force arrows and torque arcs. Joint shows combined task and scene variation. Appearance varies task materials on fixed motion. Counts describe previews, not production dataset size.</p>
+<nav class="links"><a href="viewer.html">3D scene, appearance and pose viewer</a><a href="viewer.html?poses=leap">LEAP Hand pose variation</a><span id="released"></span></nav></header>
 <div class="summary" id="stats"></div>
 <div class="controls"><label id="embodimentControl" hidden>Embodiment <select id="embodiment"><option value="">All embodiments</option></select></label><label>Task <select id="task"><option value="">All tasks</option></select></label><label>Release status <select id="releaseStatus"><option value="">All</option><option value="released">Released</option><option value="unreleased">Unreleased</option></select></label><label>Axis <select id="axis"><option value="nominal" selected>Nominal</option><option value="joint">Joint</option><option value="spatial">Spatial</option><option value="geometry">Geometry</option><option value="appearance">Appearance</option></select></label><button id="play">Pause visible</button><span id="count"></span></div>
 <section><h2>Previews</h2><div id="grid"></div><p id="empty" hidden>No previews match these filters.</p></section>
@@ -36,7 +36,11 @@ function summary(){
  $('released').replaceChildren();for(const item of catalog.released||[]){const a=document.createElement('a');a.href=item.release_review;a.textContent=item.task.replaceAll('_',' ')+' release';$('released').append(a);if(item.appearance_review){const b=document.createElement('a');b.href=item.appearance_review;b.textContent=item.task.replaceAll('_',' ')+' materials';$('released').append(b)}}
  const hasEmbodiments=catalog.tasks.some(task=>task.embodiment);
  $('embodimentControl').hidden=!hasEmbodiments;
- if(hasEmbodiments)options('embodiment',catalog.tasks.map(embodimentOf));
+ if(hasEmbodiments){
+  options('embodiment',catalog.tasks.map(embodimentOf));
+  const requested=new URLSearchParams(location.search).get('embodiment');
+  if([...$('embodiment').options].some(option=>option.value===requested))$('embodiment').value=requested;
+ }
  updateTaskOptions();
 }
 const embodimentOf=task=>task.embodiment||'Parallel-jaw';
