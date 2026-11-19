@@ -141,7 +141,7 @@ function distributionRanges(){
  $('legend').textContent=['Observed across these rollouts',...measured.filter(([,value])=>value).map(([label,value])=>`${label} ${value}`)].join(' · ')
 }
 function distributionVisible(item){
- if(item.kind==='room'||(item.kind==='task'&&!$('taskFilter').value))return false;
+ if(item.kind==='room'||(item.kind==='task'&&poseSet()!=='leap'&&!$('taskFilter').value))return false;
  if(item.kind==='robot')return $('showRobot').checked;
  if(item.kind==='table')return $('showTable').checked;
  return true
