@@ -44,9 +44,9 @@ const taskName=item=>item.title||item.task.replaceAll('_',' ');
 function poseRows(kind){
  const filter=$('taskFilter').value;
  if(poseSet()==='leap'){
-  return activeEpisodes().filter(item=>item.task===filter).map(item=>({
-   ...item.frames[0],task:item.task,sourceIndex:item.variant,episode:item,
-   label:`Demo ${item.variant} · seed ${item.seed}`
+  return activeEpisodes().filter(item=>(!filter||item.task===filter)&&item.pose_markers.includes(kind)).map(item=>({
+   ...item.frames[0],task:item.task,sourceIndex:item.id,episode:item,
+   label:filter?`Demo ${item.variant}`:`${taskName(item)} · demo ${item.variant}`
   }));
  }
  const values=poseSet()==='original'
@@ -62,10 +62,18 @@ function updatePoseChoices(){
   displayedPoses[kind]=poseSet()==='leap'?data:farthestSamples(data,kind);
   if(!separate())continue;
   const choice=$(kind+'Choice'), chosen=selection();
-  if(poseSet()==='leap')chosen[kind]=episode?.variant;
+  if(poseSet()==='leap')chosen[kind]=episode?.id;
   choice.replaceChildren();
   for(const item of displayedPoses[kind])choice.add(new Option(item.label,String(item.sourceIndex)));
-  if(!displayedPoses[kind].some(item=>item.sourceIndex===chosen[kind]))chosen[kind]=displayedPoses[kind][0]?.sourceIndex??null;
+  if(!displayedPoses[kind].some(item=>item.sourceIndex===chosen[kind])){
+   chosen[kind]=poseSet()==='leap'?null:displayedPoses[kind][0]?.sourceIndex??null;
+   if(poseSet()==='leap'){
+    const placeholder=new Option(data.length?'Select a sample':'No samples for this task','');
+    placeholder.disabled=true;
+    choice.add(placeholder,0);
+    choice.value='';
+   }
+  }
   if(chosen[kind]!==null)choice.value=String(chosen[kind]);
  }
  updatePoseSelection();
@@ -102,13 +110,15 @@ function bounds(points){return [0,1,2].map(i=>[Math.min(...points.map(p=>p[i])),
 function distributionRanges(){
  const data=poseRows('camera'),original=poseSet()==='original',source=original?'historical pose samples':'physical Joint previews';
  if(poseSet()==='leap'){
-  const study=payload.leap_pose_distribution[episode.task];
-  const bound=(axes,key,scale=1)=>{
-   return `${(axes[key].low*scale).toFixed(1)} to ${(axes[key].high*scale).toFixed(1)}`;
-  };
-  const camera=study.camera_bounds,base=study.robot_base_bounds;
-  $('ranges').textContent=`${data.length} rendered demos · ${study.passed}/${study.proposed} sampled scenes passed checks`;
-  $('legend').textContent=`Proposal ranges · Camera azimuth ${bound(camera,'azimuth_deg')}°, elevation ${bound(camera,'elevation_deg')}°, FOV ${bound(camera,'fovy_deg')}° | Base X ${bound(base,'mount_x_m',100)} cm, Y ${bound(base,'mount_y_m',100)} cm, rise ${bound(base,'pedestal_rise_m',100)} cm, yaw ${bound(base,'mount_yaw_deg')}°`;
+  const task=$('taskFilter').value;
+  const studies=task?[payload.leap_pose_distribution[task]]:Object.values(payload.leap_pose_distribution);
+  const proposed=studies.reduce((sum,study)=>sum+study.proposed,0);
+  const passed=studies.reduce((sum,study)=>sum+study.passed,0);
+  const demos=new Set([...data,...poseRows('robot')].map(row=>row.episode.id));
+  $('ranges').textContent=`${data.length} camera samples · ${poseRows('robot').length} robot-base samples · ${demos.size} rollouts`;
+  const fov=data.map(row=>row.camera_fovy_deg);
+  const crop=fov.length?` · Framed vertical FOV ${Math.min(...fov).toFixed(1)}–${Math.max(...fov).toFixed(1)}°`:'';
+  $('legend').textContent=`${passed}/${proposed} sampled scenes passed checks${crop}`;
   return;
  }
  $('legend').textContent='';
@@ -164,13 +174,12 @@ function fitDistribution(){
  if(!points.length)return;const ranges=bounds(points);center=ranges.map(x=>(x[0]+x[1])/2);const {right,up}=basis(),xs=points.map(p=>dot(sub(p,center),right)),ys=points.map(p=>dot(sub(p,center),up));scale=Math.min(canvas.clientWidth*.78/Math.max(.25,Math.max(...xs)-Math.min(...xs)),canvas.clientHeight*.78/Math.max(.25,Math.max(...ys)-Math.min(...ys)));distributionRanges();drawDistribution()
 }
 function updateTaskChoices(){
- const leap=poseSet()==='leap';
  const items=new Map(activeEpisodes().map(e=>[e.task,e]));
  const choose=$('taskFilter'), previous=choose.value;
  choose.replaceChildren();
- if(!leap)choose.add(new Option('All tasks',''));
+ choose.add(new Option('All tasks',''));
  for(const [key,item] of [...items].sort(([a],[b])=>a.localeCompare(b)))choose.add(new Option(taskName(item),key));
- choose.value=items.has(previous)?previous:leap?items.keys().next().value:'';
+ choose.value=items.has(previous)?previous:'';
 }
 function syncView(){
  if(!payload)return;
@@ -189,7 +198,7 @@ function syncView(){
  const showLeap=!single&&poseSet()==='leap';
  $('leapPoseSummary').hidden=!showLeap;
  for(const id of ['ranges','legend','poseSelection'])$(showLeap?'leapPoseSummary':'distributionInfo').appendChild($(id));
- if(single&&!$('taskFilter').value)$('taskFilter').value=episode?.task||activeEpisodes()[0].task;
+ if(single&&poseSet()!=='leap'&&!$('taskFilter').value)$('taskFilter').value=episode?.task||activeEpisodes()[0].task;
  fillVariants();
 }
 function visible(item){return !(item.kind==='robot'&&!$('showRobot').checked||item.kind==='table'&&!$('showTable').checked||item.kind==='room'&&!$('showRoom').checked)}
@@ -213,7 +222,7 @@ function fit(){if($('view').value==='distribution'){fitDistribution();return}con
 function selectEpisode(item,refit=true){
  const changed=episode?.id!==item.id;
  episode=item;
- $('variant').value=String(item.variant);
+ $('variant').value=item.pose_preview?item.id:String(item.variant);
  $('parameters').textContent=JSON.stringify(item.variation,null,2);
  const shared=item.variation?.shared_appearance;
  const label=value=>value.replaceAll('_',' ');
@@ -235,14 +244,17 @@ function selectEpisode(item,refit=true){
 }
 function choose(){
  const items=activeEpisodes(),task=$('taskFilter').value||episode?.task||items[0].task;
- const item=items.find(e=>e.task===task&&e.variant===Number($('variant').value));
+ const item=poseSet()==='leap'?items.find(e=>e.id===$('variant').value):items.find(e=>e.task===task&&e.variant===Number($('variant').value));
  if(item)selectEpisode(item);
 }
 function fillVariants(){
  const items=activeEpisodes(),task=$('taskFilter').value||(items.some(e=>e.task===episode?.task)?episode.task:items[0].task);
- const selected=$('variant').value;
+ const leap=poseSet()==='leap',filter=$('taskFilter').value;
+ const selected=leap?episode?.id:$('variant').value;
  $('variant').replaceChildren();
- for(const item of items.filter(e=>e.task===task))$('variant').add(new Option(String(item.variant),String(item.variant)));
+ for(const item of items.filter(e=>leap?(!filter||e.task===filter):e.task===task)){
+  $('variant').add(new Option(leap?`${taskName(item)} · demo ${item.variant}`:String(item.variant),leap?item.id:String(item.variant)));
+ }
  if([...$('variant').options].some(o=>o.value===selected))$('variant').value=selected;
  choose();
 }
@@ -262,8 +274,8 @@ function choosePose(kind,index){
 }
 $('view').onchange=syncView;
 $('poseSet').onchange=syncView;
-for(const kind of ['camera','robot'])$(kind+'Choice').onchange=()=>choosePose(kind,Number($(kind+'Choice').value));
-$('taskFilter').onchange=()=>{if($('taskFilter').value)fillVariants();else fitDistribution()};
+for(const kind of ['camera','robot'])$(kind+'Choice').onchange=()=>choosePose(kind,poseSet()==='leap'?$(kind+'Choice').value:Number($(kind+'Choice').value));
+$('taskFilter').onchange=()=>{if($('taskFilter').value||poseSet()==='leap')fillVariants();else fitDistribution()};
 $('variant').onchange=choose;
 $('pose').onchange=()=>{if(episode){$('video').currentTime=frame().time_seconds;draw()}};
 for(const id of ['showRobot','showTable','showRoom','showCamera'])$(id).onchange=draw;
