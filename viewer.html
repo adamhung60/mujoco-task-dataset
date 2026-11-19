@@ -23,7 +23,7 @@
 <label id="roomLabel"><input id="showRoom" type="checkbox">Background</label>
 <label><input id="showCamera" type="checkbox" checked>Cameras</label>
 </div>
-<main><section><div class="stage"><canvas id="scene" tabindex="0" aria-label="Rotatable 3D task scene"></canvas><canvas id="overlay" aria-hidden="true"></canvas></div><p class="hint" id="hint">Drag to orbit · Shift-drag or right-drag to pan · Scroll to zoom. Click a camera or robot base to select its preview.</p><div id="distributionInfo"><div id="ranges" class="hint"></div><div id="legend" class="hint"></div><div id="poseSelection" class="hint"></div></div></section><aside class="side"><video id="video" controls muted playsinline></video><div class="status" id="status">Loading current release scenes…</div><section id="leapPoseSummary" hidden><h2>LEAP Hand pose variation</h2><p>Camera framing and robot-base motion were tested separately across all four tasks.</p></section><details><summary>Sampled variation</summary><pre id="parameters"></pre></details></aside></main>
+<main><section><div class="stage"><canvas id="scene" tabindex="0" aria-label="Rotatable 3D task scene"></canvas><canvas id="overlay" aria-hidden="true"></canvas></div><p class="hint" id="hint">Drag to orbit · Shift-drag or right-drag to pan · Scroll to zoom. Click a camera or robot base to select its preview.</p><div id="distributionInfo"><div id="ranges" class="hint"></div><div id="legend" class="hint"></div><div id="poseSelection" class="hint"></div></div></section><aside class="side"><video id="video" controls muted playsinline></video><div class="status" id="status">Loading current release scenes…</div><section id="leapPoseSummary" hidden><h2>LEAP Hand pose variation</h2><p>Click a camera or base marker to play the rollout recorded with that camera and base.</p></section><details><summary>Sampled variation</summary><pre id="parameters"></pre></details></aside></main>
 <script>
 const $=id=>document.getElementById(id),canvas=$('scene'),overlay=$('overlay'),gl=canvas.getContext('webgl',{alpha:false,antialias:true}),fallback=gl?null:canvas.getContext('2d'),ctx=overlay.getContext('2d');
 let payload,episode,yaw=.75,elev=.55,scale=650,center=[-.12,0,.07],drag=null,dragStart=null,mode='orbit',buffers=new Map(),program,uniform={},hitPoints=[],poseSelections={original:{camera:null,robot:null},leap:{camera:null,robot:null}},displayedPoses={camera:[],robot:[]};
@@ -37,21 +37,21 @@ function meshBuffer(key){if(buffers.has(key))return buffers.get(key);const geome
 function frame(){return episode?.frames[Number($('pose').value)]}
 function basis(){const right=[-Math.sin(yaw),Math.cos(yaw),0],toward=[Math.cos(elev)*Math.cos(yaw),Math.cos(elev)*Math.sin(yaw),Math.sin(elev)],up=cross(toward,right);return {right,toward,up}}
 const poseSet=()=>$('poseSet').value;
-const independent=()=>poseSet()!=='released';
+const separate=()=>poseSet()!=='released';
+const activeEpisodes=()=>payload.episodes.filter(item=>Boolean(item.pose_preview)===(poseSet()==='leap'));
 const selection=()=>poseSelections[poseSet()];
 const taskName=item=>item.title||item.task.replaceAll('_',' ');
 function poseRows(kind){
  const filter=$('taskFilter').value;
  if(poseSet()==='leap'){
-  const study=payload.leap_pose_distribution[episode?.task],reference=episode?.frames[0];
-  if(!study||!reference)return [];
-  const rows=kind==='camera'?study.cameras:study.mounts;
-  return [{...reference,task:episode.task,sourceIndex:0,label:'Nominal'},
-          ...rows.map((row,i)=>({...row,task:episode.task,sourceIndex:i+1,label:'Seed '+row.seed}))];
+  return activeEpisodes().filter(item=>item.task===filter).map(item=>({
+   ...item.frames[0],task:item.task,sourceIndex:item.variant,episode:item,
+   label:`Demo ${item.variant} · seed ${item.seed}`
+  }));
  }
  const values=poseSet()==='original'
   ?payload.original_pose_distribution.samples.map((s,i)=>({...s,sourceIndex:i,label:`#${i+1} · ${taskName(s)}`,episode:null}))
-  :payload.episodes.map(e=>({task:e.task,camera:e.frames[0].camera,robot_base:e.frames[0].robot_base,camera_fovy_deg:e.frames[0].camera_fovy_deg,episode:e}));
+  :activeEpisodes().map(e=>({task:e.task,camera:e.frames[0].camera,robot_base:e.frames[0].robot_base,camera_fovy_deg:e.frames[0].camera_fovy_deg,episode:e}));
  return values.filter(row=>!filter||row.task===filter);
 }
 function poseFeatures(item,kind){const t=item[kind==='robot'?'robot_base':'camera'],p=posePoint(t),axis=[t[0][kind==='camera'?2:0],t[1][kind==='camera'?2:0],t[2][kind==='camera'?2:0]];return [...p,...axis,...(kind==='camera'?[item.camera_fovy_deg/60]:[])]}
@@ -60,8 +60,9 @@ function updatePoseChoices(){
  for(const kind of ['camera','robot']){
   const data=poseRows(kind);
   displayedPoses[kind]=poseSet()==='leap'?data:farthestSamples(data,kind);
-  if(!independent())continue;
+  if(!separate())continue;
   const choice=$(kind+'Choice'), chosen=selection();
+  if(poseSet()==='leap')chosen[kind]=episode?.variant;
   choice.replaceChildren();
   for(const item of displayedPoses[kind])choice.add(new Option(item.label,String(item.sourceIndex)));
   if(!displayedPoses[kind].some(item=>item.sourceIndex===chosen[kind]))chosen[kind]=displayedPoses[kind][0]?.sourceIndex??null;
@@ -73,25 +74,26 @@ function selectedSample(kind){
  return displayedPoses[kind].find(item=>item.sourceIndex===selection()?.[kind]);
 }
 function updatePoseSelection(){
- if(!independent()){$('poseSelection').textContent='';return}
+ if(!separate()){$('poseSelection').textContent='';return}
+ if(poseSet()==='leap'&&episode?.pose_preview){
+  const {camera,robot_base:base}=episode.variation;
+  $('poseSelection').textContent=`Demo ${episode.variant} · Camera ${camera.azimuth_deg.toFixed(1)}° azimuth, ${camera.elevation_deg.toFixed(1)}° elevation, ${camera.fovy_deg.toFixed(1)}° FOV · Base X ${(base.mount_x_m*100).toFixed(1)} cm, Y ${(base.mount_y_m*100).toFixed(1)} cm, yaw ${base.mount_yaw_deg.toFixed(1)}°`;
+  return;
+ }
  const describe=kind=>{
   const sample=selectedSample(kind);
   if(!sample)return '';
   const p=posePoint(sample[kind==='robot'?'robot_base':'camera']);
   const coordinates=p.map(x=>(x*100).toFixed(1)).join(', ');
-  const extra=kind==='camera'? ` · FOV ${sample.camera_fovy_deg.toFixed(1)}°`:
-   sample.parameters?` · yaw ${sample.parameters.mount_yaw_deg.toFixed(1)}°`:'';
+  const extra=kind==='camera'?` · FOV ${sample.camera_fovy_deg.toFixed(1)}°`:'';
   return `${kind==='camera'?'Camera':'Robot base'} · ${sample.label} · XYZ ${coordinates} cm${extra}`;
  };
  $('poseSelection').textContent=['camera','robot'].map(describe).filter(Boolean).join('  |  ');
 }
 const multiply=(a,b)=>a.map(row=>b[0].map((_,j)=>row.reduce((sum,v,k)=>sum+v*b[k][j],0))),inverseRigid=t=>{const rotation=[0,1,2].map(i=>[t[0][i],t[1][i],t[2][i]]);return [...rotation.map(row=>[...row,-dot(row,t.slice(0,3).map(r=>r[3]))]),[0,0,0,1]]};
 function distributionFrame(){
- const current=episode?.frames[0], sample=independent()?selectedSample('robot'):null;
+ const current=episode?.frames[0], sample=poseSet()==='original'?selectedSample('robot'):null;
  if(!current||!sample)return current;
- if(poseSet()==='leap'){
-  return sample.robot?{...current,geoms:[...current.geoms.filter(item=>item.kind!=='robot'),...sample.robot]}:current;
- }
  const delta=multiply(sample.robot_base,inverseRigid(current.robot_base));
  return {...current,geoms:current.geoms.map(item=>item.kind==='robot'?{...item,transform:multiply(delta,item.transform)}:item)};
 }
@@ -100,13 +102,13 @@ function bounds(points){return [0,1,2].map(i=>[Math.min(...points.map(p=>p[i])),
 function distributionRanges(){
  const data=poseRows('camera'),original=poseSet()==='original',source=original?'historical pose samples':'physical Joint previews';
  if(poseSet()==='leap'){
-  const {cameras,mounts}=payload.leap_pose_distribution[episode.task];
-  const extent=(rows,key,scale=1)=>{
-   const values=rows.map(row=>row.parameters[key]*scale);
-   return `${Math.min(...values).toFixed(1)} to ${Math.max(...values).toFixed(1)}`;
+  const study=payload.leap_pose_distribution[episode.task];
+  const bound=(axes,key,scale=1)=>{
+   return `${(axes[key].low*scale).toFixed(1)} to ${(axes[key].high*scale).toFixed(1)}`;
   };
-  $('ranges').textContent=`${cameras.length} screened cameras · ${mounts.length} tested base poses · plus nominal`;
-  $('legend').textContent=`Camera azimuth ${extent(cameras,'azimuth_deg')}° · elevation ${extent(cameras,'elevation_deg')}° · FOV ${extent(cameras,'fovy_deg')}° | Base X ${extent(mounts,'mount_x_m',100)} cm · Y ${extent(mounts,'mount_y_m',100)} cm · rise ${extent(mounts,'pedestal_rise_m',100)} cm · yaw ${extent(mounts,'mount_yaw_deg')}°`;
+  const camera=study.camera_bounds,base=study.robot_base_bounds;
+  $('ranges').textContent=`${data.length} rendered demos · ${study.passed}/${study.proposed} sampled scenes passed checks`;
+  $('legend').textContent=`Proposal ranges · Camera azimuth ${bound(camera,'azimuth_deg')}°, elevation ${bound(camera,'elevation_deg')}°, FOV ${bound(camera,'fovy_deg')}° | Base X ${bound(base,'mount_x_m',100)} cm, Y ${bound(base,'mount_y_m',100)} cm, rise ${bound(base,'pedestal_rise_m',100)} cm, yaw ${bound(base,'mount_yaw_deg')}°`;
   return;
  }
  $('legend').textContent='';
@@ -152,9 +154,9 @@ function drawDistribution(){
  if(gl){gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(.078,.118,.165,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT)}else{fallback.setTransform(ratio,0,0,ratio,0,0);fallback.fillStyle='#141e2a';fallback.fillRect(0,0,rect.width,rect.height)}
  drawSelectedDistributionScene(rect,ratio);ctx.setTransform(ratio,0,0,ratio,0,0);ctx.clearRect(0,0,rect.width,rect.height);
  const {right,up}=basis(),project=p=>{const v=sub(p,center);return [rect.width/2+dot(v,right)*scale,rect.height/2-dot(v,up)*scale]},line=(a,b,color,width)=>{ctx.strokeStyle=color;ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(...project(a));ctx.lineTo(...project(b));ctx.stroke()};
- hitPoints=[];const separate=independent(),original=poseSet()==='original',palette=['#ffb86b','#74d9c0','#a8a0ff','#f587a8','#e2d36c','#81b8ff','#ce9bea','#9be077'],tasks=[...new Set(poseRows('camera').map(e=>e.task))].sort(),color=item=>palette[tasks.indexOf(item.task)%palette.length];
- if($('showCamera').checked)for(const item of displayedPoses.camera){const selected=separate?item.sourceIndex===selection().camera:item.episode===episode,stroke=selected?'#ffdf95':color(item)+'9c',origin=posePoint(item.camera),depth=original?.065:-.065,halfY=Math.abs(depth)*Math.tan(item.camera_fovy_deg*Math.PI/360),halfX=halfY*512/352,corners=[[-halfX,-halfY,depth],[halfX,-halfY,depth],[halfX,halfY,depth],[-halfX,halfY,depth]].map(p=>world(item.camera,p));for(let i=0;i<4;i++){line(origin,corners[i],stroke,selected?2.6:1);line(corners[i],corners[(i+1)%4],stroke,selected?2.6:1)}const p=project(origin);ctx.fillStyle=stroke;ctx.beginPath();ctx.arc(...p,selected?6:3.5,0,2*Math.PI);ctx.fill();hitPoints.push({kind:separate?'camera':'release',item:separate?item:item.episode,p});if(selected){ctx.fillStyle='#e5edf5';ctx.font='12px system-ui';ctx.fillText(separate?`camera · ${item.label}`:'selected camera',p[0]+8,p[1]-8)}}
- if($('showRobot').checked)for(const item of displayedPoses.robot){const selected=separate?item.sourceIndex===selection().robot:item.episode===episode,stroke=selected?'#a9f0dd':color(item)+'9c',base=posePoint(item.robot_base);for(const axis of [[.055,0,0],[0,.055,0],[0,0,.055]])line(base,world(item.robot_base,axis),stroke,selected?2.6:1.4);const p=project(base);ctx.fillStyle=stroke;ctx.fillRect(p[0]-(selected?5:3),p[1]-(selected?5:3),selected?10:6,selected?10:6);hitPoints.push({kind:separate?'robot':'release',item:separate?item:item.episode,p});if(selected){ctx.fillStyle='#e5edf5';ctx.font='12px system-ui';ctx.fillText(separate?`base · ${item.label}`:'selected robot base',p[0]+8,p[1]-8)}}
+ hitPoints=[];const pairedMarkers=separate(),original=poseSet()==='original',palette=['#ffb86b','#74d9c0','#a8a0ff','#f587a8','#e2d36c','#81b8ff','#ce9bea','#9be077'],tasks=[...new Set(poseRows('camera').map(e=>e.task))].sort(),color=item=>palette[tasks.indexOf(item.task)%palette.length];
+ if($('showCamera').checked)for(const item of displayedPoses.camera){const selected=pairedMarkers?item.sourceIndex===selection().camera:item.episode===episode,stroke=selected?'#ffdf95':color(item)+'9c',origin=posePoint(item.camera),depth=original?.065:-.065,halfY=Math.abs(depth)*Math.tan(item.camera_fovy_deg*Math.PI/360),halfX=halfY*512/352,corners=[[-halfX,-halfY,depth],[halfX,-halfY,depth],[halfX,halfY,depth],[-halfX,halfY,depth]].map(p=>world(item.camera,p));for(let i=0;i<4;i++){line(origin,corners[i],stroke,selected?2.6:1);line(corners[i],corners[(i+1)%4],stroke,selected?2.6:1)}const p=project(origin);ctx.fillStyle=stroke;ctx.beginPath();ctx.arc(...p,selected?6:3.5,0,2*Math.PI);ctx.fill();hitPoints.push({kind:pairedMarkers?'camera':'release',item:pairedMarkers?item:item.episode,p});if(selected){ctx.fillStyle='#e5edf5';ctx.font='12px system-ui';ctx.fillText(pairedMarkers?`camera · ${item.label}`:'selected camera',p[0]+8,p[1]-8)}}
+ if($('showRobot').checked)for(const item of displayedPoses.robot){const selected=pairedMarkers?item.sourceIndex===selection().robot:item.episode===episode,stroke=selected?'#a9f0dd':color(item)+'9c',base=posePoint(item.robot_base);for(const axis of [[.055,0,0],[0,.055,0],[0,0,.055]])line(base,world(item.robot_base,axis),stroke,selected?2.6:1.4);const p=project(base);ctx.fillStyle=stroke;ctx.fillRect(p[0]-(selected?5:3),p[1]-(selected?5:3),selected?10:6,selected?10:6);hitPoints.push({kind:pairedMarkers?'robot':'release',item:pairedMarkers?item:item.episode,p});if(selected){ctx.fillStyle='#e5edf5';ctx.font='12px system-ui';ctx.fillText(pairedMarkers?`base · ${item.label}`:'selected robot base',p[0]+8,p[1]-8)}}
 }
 function fitDistribution(){
  updatePoseChoices();const points=[...poseRows('camera').map(e=>posePoint(e.camera)),...poseRows('robot').map(e=>posePoint(e.robot_base))];
@@ -162,8 +164,8 @@ function fitDistribution(){
  if(!points.length)return;const ranges=bounds(points);center=ranges.map(x=>(x[0]+x[1])/2);const {right,up}=basis(),xs=points.map(p=>dot(sub(p,center),right)),ys=points.map(p=>dot(sub(p,center),up));scale=Math.min(canvas.clientWidth*.78/Math.max(.25,Math.max(...xs)-Math.min(...xs)),canvas.clientHeight*.78/Math.max(.25,Math.max(...ys)-Math.min(...ys)));distributionRanges();drawDistribution()
 }
 function updateTaskChoices(){
- const single=$('view').value==='single',leap=!single&&poseSet()==='leap';
- const items=new Map(payload.episodes.filter(e=>!leap||payload.leap_pose_distribution[e.task]).map(e=>[e.task,e]));
+ const leap=poseSet()==='leap';
+ const items=new Map(activeEpisodes().map(e=>[e.task,e]));
  const choose=$('taskFilter'), previous=choose.value;
  choose.replaceChildren();
  if(!leap)choose.add(new Option('All tasks',''));
@@ -172,22 +174,22 @@ function updateTaskChoices(){
 }
 function syncView(){
  if(!payload)return;
- const single=$('view').value==='single',separate=independent();
+ const single=$('view').value==='single',menus=separate();
  updateTaskChoices();
- $('poseSetLabel').hidden=single;
- for(const id of ['cameraChoiceLabel','robotChoiceLabel'])$(id).hidden=single||!separate;
+ $('poseSetLabel').hidden=false;
+ for(const id of ['cameraChoiceLabel','robotChoiceLabel'])$(id).hidden=single||!menus;
  for(const id of ['variantLabel','poseLabel','roomLabel'])$(id).hidden=!single;
  $('showRobot').parentElement.lastChild.textContent=single?'Robot':'Robots';
  $('showCamera').parentElement.lastChild.textContent=single?'Camera':'Cameras';
  $('fit').textContent=single?'Fit scene':'Fit distribution';
  $('hint').textContent=single?'Drag to orbit · Shift-drag or right-drag to pan · Scroll to zoom.':
-  separate?'Drag to orbit · Shift-drag or right-drag to pan · Scroll to zoom. Click a marker or use the sample menus.':
+  menus?'Drag to orbit · Shift-drag or right-drag to pan · Scroll to zoom. Click a marker or use the sample menus.':
   'Drag to orbit · Shift-drag or right-drag to pan · Scroll to zoom. Click a camera or robot base to select its preview.';
- $('ranges').hidden=single;$('legend').hidden=single;$('poseSelection').hidden=single||!separate;
+ $('ranges').hidden=single;$('legend').hidden=single;$('poseSelection').hidden=single||!menus;
  const showLeap=!single&&poseSet()==='leap';
  $('leapPoseSummary').hidden=!showLeap;
  for(const id of ['ranges','legend','poseSelection'])$(showLeap?'leapPoseSummary':'distributionInfo').appendChild($(id));
- if(single&&!$('taskFilter').value)$('taskFilter').value=episode?.task||payload.episodes[0].task;
+ if(single&&!$('taskFilter').value)$('taskFilter').value=episode?.task||activeEpisodes()[0].task;
  fillVariants();
 }
 function visible(item){return !(item.kind==='robot'&&!$('showRobot').checked||item.kind==='table'&&!$('showTable').checked||item.kind==='room'&&!$('showRoom').checked)}
@@ -208,11 +210,62 @@ function draw(){if($('view').value==='distribution'){drawDistribution();return}c
  for(const item of current.geoms){if(!visible(item))continue;const mesh=meshBuffer(item.mesh);gl.bindBuffer(gl.ARRAY_BUFFER,mesh.buffer);for(const [attribute,offset] of [['position',0],['normal',12]]){const location=gl.getAttribLocation(program,attribute);gl.enableVertexAttribArray(location);gl.vertexAttribPointer(location,3,gl.FLOAT,false,24,offset)}gl.uniformMatrix4fv(uniform.model,false,matrix(item.transform));gl.uniform4f(uniform.color,...item.color,1);gl.drawArrays(gl.TRIANGLES,0,mesh.count)}}else{fallback.setTransform(ratio,0,0,ratio,0,0);drawFallback(current,rect,right,up,toward)}
  ctx.setTransform(ratio,0,0,ratio,0,0);ctx.clearRect(0,0,rect.width,rect.height);if(!$('showCamera').checked)return;const project=p=>{const v=sub(p,center);return [rect.width/2+dot(v,right)*scale,rect.height/2-dot(v,up)*scale]};const line=(a,b,color,width=1.5)=>{ctx.strokeStyle=color;ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(...project(a));ctx.lineTo(...project(b));ctx.stroke()};const origin=world(current.camera,[0,0,0]),depth=.08,halfY=depth*Math.tan(current.camera_fovy_deg*Math.PI/360),halfX=halfY*512/352,corners=[[-halfX,-halfY,-depth],[halfX,-halfY,-depth],[halfX,halfY,-depth],[-halfX,halfY,-depth]].map(p=>world(current.camera,p));for(let i=0;i<4;i++){line(origin,corners[i],'#ffbf69');line(corners[i],corners[(i+1)%4],'#ffbf69')}ctx.fillStyle='#ffcf87';ctx.fillText('camera',...project(origin).map((x,i)=>x+(i? -6:6)));const base=world(current.robot_base,[0,0,0]);for(const [axis,color] of [[[.05,0,0],'#fb8790'],[[0,.05,0],'#87dfa2'],[[0,0,.05],'#91bfff']])line(base,world(current.robot_base,axis),color,2.5)}
 function fit(){if($('view').value==='distribution'){fitDistribution();return}const current=frame();if(!current)return;const points=[];for(const item of current.geoms){if(item.kind==='table'||item.kind==='room')continue;const bounds=payload.geometry[item.mesh].bounds;for(const x of [0,1])for(const y of [0,1])for(const z of [0,1])points.push(world(item.transform,[bounds[x][0],bounds[y][1],bounds[z][2]]))}if(!points.length)return;const low=[0,1,2].map(i=>Math.min(...points.map(p=>p[i]))),high=[0,1,2].map(i=>Math.max(...points.map(p=>p[i])));center=low.map((v,i)=>(v+high[i])/2);const {right,up}=basis(),xs=points.map(p=>dot(sub(p,center),right)),ys=points.map(p=>dot(sub(p,center),up));scale=Math.min(canvas.clientWidth*.82/Math.max(.15,Math.max(...xs)-Math.min(...xs)),canvas.clientHeight*.82/Math.max(.15,Math.max(...ys)-Math.min(...ys)));draw()}
-function selectEpisode(item,refit=true){episode=item;$('variant').value=String(item.variant);$('parameters').textContent=JSON.stringify(item.variation,null,2);$('status').textContent=taskName(item)+' · variation '+item.variant+(poseSet()==='leap'&&$('view').value==='distribution'?' · release reference video':' · current released Joint preview');$('video').src=item.video;$('video').onloadedmetadata=()=>{$('video').currentTime=frame().time_seconds};if(refit)fit();else draw()}
-function choose(){const task=$('taskFilter').value||episode?.task||payload.episodes[0].task,item=payload.episodes.find(e=>e.task===task&&e.variant===Number($('variant').value));if(item)selectEpisode(item)}
-function fillVariants(){const task=$('taskFilter').value||episode?.task||payload.episodes[0].task,selected=$('variant').value;$('variant').replaceChildren();for(const e of payload.episodes.filter(e=>e.task===task))$('variant').add(new Option(String(e.variant),String(e.variant)));if([...$('variant').options].some(o=>o.value===selected))$('variant').value=selected;choose()}
-$('view').onchange=syncView;$('poseSet').onchange=syncView;for(const kind of ['camera','robot'])$(kind+'Choice').onchange=()=>{selection()[kind]=Number($(kind+'Choice').value);updatePoseSelection();draw()};$('taskFilter').onchange=()=>{if($('taskFilter').value)fillVariants();else fitDistribution()};$('variant').onchange=choose;$('pose').onchange=()=>{if(episode){$('video').currentTime=frame().time_seconds;draw()}};for(const id of ['showRobot','showTable','showRoom','showCamera'])$(id).onchange=draw;$('fit').onclick=fit;new ResizeObserver(draw).observe(canvas);
-canvas.onpointerdown=e=>{e.preventDefault();drag=dragStart=[e.clientX,e.clientY];mode=e.shiftKey||e.button===1||e.button===2?'pan':'orbit';canvas.setPointerCapture(e.pointerId)};canvas.onpointermove=e=>{if(!drag)return;const dx=e.clientX-drag[0],dy=e.clientY-drag[1];if(mode==='pan'){const {right,up}=basis();center=center.map((v,i)=>v-dx*right[i]/scale+dy*up[i]/scale)}else{yaw-=dx*.008;elev=Math.max(-.15,Math.min(1.5,elev+dy*.008))}drag=[e.clientX,e.clientY];draw()};canvas.onpointerup=e=>{if($('view').value==='distribution'&&dragStart&&Math.hypot(e.clientX-dragStart[0],e.clientY-dragStart[1])<5){const rect=canvas.getBoundingClientRect(),p=[e.clientX-rect.left,e.clientY-rect.top],nearest=hitPoints.map(h=>({...h,d:Math.hypot(h.p[0]-p[0],h.p[1]-p[1])})).sort((a,b)=>a.d-b.d)[0];if(nearest&&nearest.d<14){if(nearest.kind==='release')selectEpisode(nearest.item,false);else{selection()[nearest.kind]=nearest.item.sourceIndex;$(nearest.kind+'Choice').value=String(nearest.item.sourceIndex);updatePoseSelection();draw()}}}drag=dragStart=null;if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId)};canvas.onpointercancel=()=>drag=dragStart=null;canvas.oncontextmenu=e=>e.preventDefault();canvas.onwheel=e=>{e.preventDefault();scale=Math.max(100,Math.min(5000,scale*Math.exp(-e.deltaY*.001)));draw()};
+function selectEpisode(item,refit=true){
+ const changed=episode?.id!==item.id;
+ episode=item;
+ $('variant').value=String(item.variant);
+ $('parameters').textContent=JSON.stringify(item.variation,null,2);
+ $('status').textContent=taskName(item)+(item.pose_preview?` · joint pose demo ${item.variant}`:` · variation ${item.variant} · current released Joint preview`);
+ const video=$('video');
+ const seek=()=>{video.currentTime=$('view').value==='single'?frame().time_seconds:0};
+ if(changed){
+  video.onloadedmetadata=seek;
+  video.src=item.video;
+ }else if(video.readyState>0){
+  seek();
+ }
+ if(refit)fit();else{
+  if(item.pose_preview)updatePoseChoices();
+  draw();
+ }
+}
+function choose(){
+ const items=activeEpisodes(),task=$('taskFilter').value||episode?.task||items[0].task;
+ const item=items.find(e=>e.task===task&&e.variant===Number($('variant').value));
+ if(item)selectEpisode(item);
+}
+function fillVariants(){
+ const items=activeEpisodes(),task=$('taskFilter').value||(items.some(e=>e.task===episode?.task)?episode.task:items[0].task);
+ const selected=$('variant').value;
+ $('variant').replaceChildren();
+ for(const item of items.filter(e=>e.task===task))$('variant').add(new Option(String(item.variant),String(item.variant)));
+ if([...$('variant').options].some(o=>o.value===selected))$('variant').value=selected;
+ choose();
+}
+function choosePose(kind,index){
+ selection()[kind]=index;
+ if(poseSet()==='leap'){
+  const sample=selectedSample(kind);
+  if(sample?.episode){
+   selectEpisode(sample.episode,false);
+   $('video').play().catch(()=>{});
+  }
+ }else{
+  $(kind+'Choice').value=String(index);
+  updatePoseSelection();
+  draw();
+ }
+}
+$('view').onchange=syncView;
+$('poseSet').onchange=syncView;
+for(const kind of ['camera','robot'])$(kind+'Choice').onchange=()=>choosePose(kind,Number($(kind+'Choice').value));
+$('taskFilter').onchange=()=>{if($('taskFilter').value)fillVariants();else fitDistribution()};
+$('variant').onchange=choose;
+$('pose').onchange=()=>{if(episode){$('video').currentTime=frame().time_seconds;draw()}};
+for(const id of ['showRobot','showTable','showRoom','showCamera'])$(id).onchange=draw;
+$('fit').onclick=fit;
+new ResizeObserver(draw).observe(canvas);
+canvas.onpointerdown=e=>{e.preventDefault();drag=dragStart=[e.clientX,e.clientY];mode=e.shiftKey||e.button===1||e.button===2?'pan':'orbit';canvas.setPointerCapture(e.pointerId)};canvas.onpointermove=e=>{if(!drag)return;const dx=e.clientX-drag[0],dy=e.clientY-drag[1];if(mode==='pan'){const {right,up}=basis();center=center.map((v,i)=>v-dx*right[i]/scale+dy*up[i]/scale)}else{yaw-=dx*.008;elev=Math.max(-.15,Math.min(1.5,elev+dy*.008))}drag=[e.clientX,e.clientY];draw()};canvas.onpointerup=e=>{if($('view').value==='distribution'&&dragStart&&Math.hypot(e.clientX-dragStart[0],e.clientY-dragStart[1])<5){const rect=canvas.getBoundingClientRect(),p=[e.clientX-rect.left,e.clientY-rect.top],nearest=hitPoints.map(h=>({...h,d:Math.hypot(h.p[0]-p[0],h.p[1]-p[1])})).sort((a,b)=>a.d-b.d)[0];if(nearest&&nearest.d<14){if(nearest.kind==='release')selectEpisode(nearest.item,false);else choosePose(nearest.kind,nearest.item.sourceIndex)}}drag=dragStart=null;if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId)};canvas.onpointercancel=()=>drag=dragStart=null;canvas.oncontextmenu=e=>e.preventDefault();canvas.onwheel=e=>{e.preventDefault();scale=Math.max(100,Math.min(5000,scale*Math.exp(-e.deltaY*.001)));draw()};
 fetch('viewer_data.json',{cache:'no-store'}).then(r=>{
  if(!r.ok)throw Error('Viewer data HTTP '+r.status);
  return r.json();
