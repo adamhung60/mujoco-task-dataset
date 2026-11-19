@@ -68,14 +68,19 @@ function representative(rows,limit,groupBy){
 }
 function render(){
  if(observer)observer.disconnect();const tasksById=new Map(catalog.tasks.map(t=>[t.task,t]));const rows=catalog.clips.filter(c=>matchesEmbodiment(tasksById.get(c.task))&&(!$('task').value||c.task===$('task').value)&&(!$('releaseStatus').value||tasksById.get(c.task).release_status===$('releaseStatus').value)&&(!$('axis').value||c.axis===$('axis').value));
- const limit=!$('task').value&&$('axis').value==='nominal'?1:($('task').value?9:4);
- const selected=$('task').value?representative(rows,limit,'source_axis'):[...new Set(rows.map(c=>c.task))].sort().flatMap(task=>representative(rows.filter(c=>c.task===task),limit,'source_axis'));
+ const limitFor=task=>{
+  if($('axis').value==='joint'&&embodimentOf(tasksById.get(task))==='LEAP Hand')return $('task').value?Infinity:12;
+  if(!$('task').value&&$('axis').value==='nominal')return 1;
+  return $('task').value?9:4;
+ };
+ const selected=[...new Set(rows.map(c=>c.task))].sort().flatMap(task=>
+  representative(rows.filter(c=>c.task===task),limitFor(task),'source_axis'));
  const missing=catalog.tasks.filter(t=>matchesEmbodiment(t)&&(!$('task').value||t.task===$('task').value)&&(!$('releaseStatus').value||t.release_status===$('releaseStatus').value)&&!rows.some(c=>c.task===t.task));
  $('count').textContent=selected.length+' current videos shown'+(missing.length?' · '+missing.length+' tasks awaiting current video':'');$('empty').hidden=selected.length>0||missing.length>0;$('empty').textContent=($('axis').value==='spatial'||$('axis').value==='geometry')?'No current variation video exists for this task yet.':'No current videos match these filters.';const grid=$('grid');grid.replaceChildren();
  for(const c of selected){const tile=document.createElement('button');tile.className='tile';tile.type='button';
   const media=c.media_type==='image'?document.createElement('img'):document.createElement('video');if(c.media_type==='image'){media.src=c.src;media.alt=c.quality}else{media.muted=true;media.loop=true;media.playsInline=true;media.preload='none';media.dataset.src=c.src}
   const label=document.createElement('div');label.className='label';label.textContent=taskTitle(tasksById.get(c.task));
-  const meta=document.createElement('div');meta.className='meta';meta.textContent=[c.cohort,c.axis,c.quality!=='unknown'?c.quality:null,c.outcome].filter(Boolean).join(' · ');
+  const meta=document.createElement('div');meta.className='meta';meta.textContent=[c.cohort,c.axis,c.quality!=='unknown'?c.quality:null,c.id.startsWith('joint_pose:leap_')?c.lighting:null,c.outcome].filter(Boolean).join(' · ');
   tile.append(media,label,meta);tile.onclick=()=>expand(c);grid.append(tile)}
  for(const t of missing){const tile=document.createElement('div');tile.className='tile placeholder';const name=document.createElement('strong');name.textContent=taskTitle(t);const note=document.createElement('span');note.textContent=t.embodiment&&t.release_status==='unreleased'?'In development':'Current video unavailable';tile.append(name,note);grid.append(tile)}
  observer=new IntersectionObserver(entries=>{for(const e of entries){const v=e.target;if(e.isIntersecting){if(!v.src)v.src=v.dataset.src;if(playing)v.play().catch(()=>{})}else v.pause()}},{rootMargin:'150px'});
@@ -86,5 +91,5 @@ $('close').onclick=()=>$('expanded').close();$('expanded').onclose=()=>{$('playe
 $('embodiment').onchange=()=>{updateTaskOptions();render()};
 for(const k of ['task','releaseStatus','axis'])$(k).onchange=render;
 $('play').onclick=()=>{playing=!playing;$('play').textContent=playing?'Pause visible':'Play visible';document.querySelectorAll('.tile video').forEach(v=>{if(playing&&v.src&&v.getBoundingClientRect().bottom>0&&v.getBoundingClientRect().top<innerHeight)v.play().catch(()=>{});else v.pause()})};
-fetch('catalog.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error('Catalog HTTP '+r.status);return r.json()}).then(data=>{catalog=data;summary();render()}).catch(e=>{$('count').textContent=e.message});
+fetch('catalog.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error('Catalog HTTP '+r.status);return r.json()}).then(data=>{catalog=data;summary();const axis=new URLSearchParams(location.search).get('axis');if([...$('axis').options].some(option=>option.value===axis))$('axis').value=axis;render()}).catch(e=>{$('count').textContent=e.message});
 </script></body></html>

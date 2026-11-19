@@ -23,7 +23,7 @@
 <label id="roomLabel"><input id="showRoom" type="checkbox">Background</label>
 <label><input id="showCamera" type="checkbox" checked>Cameras</label>
 </div>
-<main><section><div class="stage"><canvas id="scene" tabindex="0" aria-label="Rotatable 3D task scene"></canvas><canvas id="overlay" aria-hidden="true"></canvas></div><p class="hint" id="hint">Drag to orbit · Shift-drag or right-drag to pan · Scroll to zoom. Click a camera or robot base to select its preview.</p><div id="distributionInfo"><div id="ranges" class="hint"></div><div id="legend" class="hint"></div><div id="poseSelection" class="hint"></div></div></section><aside class="side"><video id="video" controls muted playsinline></video><div class="status" id="status">Loading current release scenes…</div><section id="leapPoseSummary" hidden><h2>LEAP Hand pose variation</h2><p>Click a camera or base marker to play the rollout recorded with that camera and base.</p></section><details><summary>Sampled variation</summary><pre id="parameters"></pre></details></aside></main>
+<main><section><div class="stage"><canvas id="scene" tabindex="0" aria-label="Rotatable 3D task scene"></canvas><canvas id="overlay" aria-hidden="true"></canvas></div><p class="hint" id="hint">Drag to orbit · Shift-drag or right-drag to pan · Scroll to zoom. Click a camera or robot base to select its preview.</p><div id="distributionInfo"><div id="ranges" class="hint"></div><div id="legend" class="hint"></div><div id="poseSelection" class="hint"></div></div></section><aside class="side"><video id="video" controls muted playsinline></video><div class="status" id="status">Loading current release scenes…</div><section id="leapPoseSummary" hidden><h2>LEAP Hand pose variation</h2><p>Select a camera or base marker to play its matching rollout with varied task geometry, surfaces, room and lighting.</p><p id="sharedAppearance"></p></section><details><summary>Sampled variation</summary><pre id="parameters"></pre></details></aside></main>
 <script>
 const $=id=>document.getElementById(id),canvas=$('scene'),overlay=$('overlay'),gl=canvas.getContext('webgl',{alpha:false,antialias:true}),fallback=gl?null:canvas.getContext('2d'),ctx=overlay.getContext('2d');
 let payload,episode,yaw=.75,elev=.55,scale=650,center=[-.12,0,.07],drag=null,dragStart=null,mode='orbit',buffers=new Map(),program,uniform={},hitPoints=[],poseSelections={original:{camera:null,robot:null},leap:{camera:null,robot:null}},displayedPoses={camera:[],robot:[]};
@@ -215,6 +215,10 @@ function selectEpisode(item,refit=true){
  episode=item;
  $('variant').value=String(item.variant);
  $('parameters').textContent=JSON.stringify(item.variation,null,2);
+ const shared=item.variation?.shared_appearance;
+ const label=value=>value.replaceAll('_',' ');
+ $('sharedAppearance').textContent=shared?
+  [label(shared['lighting.family'])+' lighting',label(item.room_family),label(shared['surface.table_id'])+' tabletop'].join(' · '):'';
  $('status').textContent=taskName(item)+(item.pose_preview?` · joint pose demo ${item.variant}`:` · variation ${item.variant} · current released Joint preview`);
  const video=$('video');
  const seek=()=>{video.currentTime=$('view').value==='single'?frame().time_seconds:0};
