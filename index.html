@@ -22,7 +22,7 @@ dialog{width:min(100vw,1100px);height:min(100dvh,850px);max-width:none;max-heigh
 dialog::backdrop{background:#000c}.viewer{height:100%;display:flex;flex-direction:column;gap:8px}.viewer header{padding:0;display:flex;justify-content:space-between}.viewer video{min-height:0;flex:1;width:100%;object-fit:contain}
 @media(max-width:700px){header,section,.summary,.controls{padding-inline:12px}}
 </style></head><body>
-<header><h1>Robot task and variation index</h1><p>Available task videos and variation previews. Nominal shows measured contact force arrows and torque arcs. Joint shows combined task and scene variation. Appearance varies task materials on fixed motion. Counts describe previews, not production dataset size.</p>
+<header><h1>Robot task and variation index</h1><p>Each variation view shows up to four videos selected for the spread of recorded parameters. Nominal shows measured contact force arrows and torque arcs. Joint shows combined variation. Appearance varies task materials on fixed motion. Counts describe previews, not production dataset size.</p>
 <nav class="links"><a href="viewer.html">3D scene, appearance and pose viewer</a><a href="viewer.html?poses=leap">LEAP Hand pose variation</a><span id="released"></span></nav></header>
 <div class="summary" id="stats"></div>
 <div class="controls"><label id="embodimentControl" hidden>Embodiment <select id="embodiment"><option value="">All embodiments</option></select></label><label>Task <select id="task"><option value="">All tasks</option></select></label><label>Release status <select id="releaseStatus"><option value="">All</option><option value="released">Released</option><option value="unreleased">Unreleased</option></select></label><label>Axis <select id="axis"><option value="nominal" selected>Nominal</option><option value="joint">Joint</option><option value="spatial">Spatial</option><option value="geometry">Geometry</option><option value="appearance">Appearance</option></select></label><button id="play">Pause visible</button><span id="count"></span></div>
@@ -54,35 +54,34 @@ function updateTaskOptions(){
  }
  select.value=[...select.options].some(option=>option.value===previous)?previous:'';
 }
-function spread(items){const chosen=[],remaining=items.map((_,i)=>i);while(remaining.length){const index=chosen.length?remaining.reduce((best,i)=>Math.min(...chosen.map(j=>Math.abs(i-j)))>Math.min(...chosen.map(j=>Math.abs(best-j)))?i:best):0;chosen.push(index);remaining.splice(remaining.indexOf(index),1)}return chosen.map(i=>items[i])}
-function representative(rows,limit,groupBy){
- if(rows.length && rows.every(row=>Number.isInteger(row.review_rank))){
-  return rows.slice().sort((a,b)=>a.review_rank-b.review_rank).slice(0,limit)
- }
- const groups=new Map();for(const row of rows){const key=row[groupBy]||row.axis;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(row)}
- const priority=['wrench','nominal','joint','spatial','geometry','appearance','reference','example','table','wall','room','lighting','asset','diagnostic'];
- const keys=[...groups.keys()].sort((a,b)=>priority.indexOf(a)-priority.indexOf(b));
- const queues=keys.map(key=>spread(groups.get(key).slice().sort((a,b)=>(a.media_type==='image')-(b.media_type==='image'))));
- const chosen=[];while(chosen.length<limit&&queues.some(q=>q.length)){for(const queue of queues){if(queue.length)chosen.push(queue.shift());if(chosen.length===limit)break}}
- return chosen;
-}
 function render(){
- if(observer)observer.disconnect();const tasksById=new Map(catalog.tasks.map(t=>[t.task,t]));const rows=catalog.clips.filter(c=>matchesEmbodiment(tasksById.get(c.task))&&(!$('task').value||c.task===$('task').value)&&(!$('releaseStatus').value||tasksById.get(c.task).release_status===$('releaseStatus').value)&&(!$('axis').value||c.axis===$('axis').value));
- const limitFor=task=>{
-  if($('axis').value==='joint'&&embodimentOf(tasksById.get(task))==='LEAP Hand')return $('task').value?Infinity:12;
-  if(!$('task').value&&$('axis').value==='nominal')return 1;
-  return $('task').value?9:4;
- };
- const selected=[...new Set(rows.map(c=>c.task))].sort().flatMap(task=>
-  representative(rows.filter(c=>c.task===task),limitFor(task),'source_axis'));
- const missing=catalog.tasks.filter(t=>matchesEmbodiment(t)&&(!$('task').value||t.task===$('task').value)&&(!$('releaseStatus').value||t.release_status===$('releaseStatus').value)&&!rows.some(c=>c.task===t.task));
- $('count').textContent=selected.length+' current videos shown'+(missing.length?' · '+missing.length+' tasks awaiting current video':'');$('empty').hidden=selected.length>0||missing.length>0;$('empty').textContent=($('axis').value==='spatial'||$('axis').value==='geometry')?'No current variation video exists for this task yet.':'No current videos match these filters.';const grid=$('grid');grid.replaceChildren();
+ if(observer)observer.disconnect();
+ const axis=$('axis').value;
+ const tasksById=new Map(catalog.tasks.map(task=>[task.task,task]));
+ const tasks=catalog.tasks.filter(t=>matchesEmbodiment(t)&&(!$('task').value||t.task===$('task').value)&&(!$('releaseStatus').value||t.release_status===$('releaseStatus').value));
+ const clipsById=new Map(catalog.clips.map(clip=>[clip.id,clip]));
+ const nominalByTask=new Map(catalog.clips.filter(clip=>clip.axis==='nominal').map(clip=>[clip.task,clip]));
+ const previewCount=axis==='nominal'?1:catalog.variation_preview_count;
+ const videosFor=t=>axis==='nominal'?[nominalByTask.get(t.task)].filter(Boolean):
+  (catalog.variation_previews[t.task]?.[axis]||[]).map(id=>clipsById.get(id));
+ const groups=tasks.map(task=>({task,videos:videosFor(task)}));
+ const selected=groups.flatMap(group=>group.videos);
+ const missing=groups.filter(group=>group.videos.length<previewCount);
+ $('count').textContent=selected.length+' videos shown'+(missing.length?' · '+missing.length+' tasks with incomplete coverage':'');
+ $('empty').hidden=tasks.length>0;
+ const grid=$('grid');grid.replaceChildren();
  for(const c of selected){const tile=document.createElement('button');tile.className='tile';tile.type='button';
   const media=c.media_type==='image'?document.createElement('img'):document.createElement('video');if(c.media_type==='image'){media.src=c.src;media.alt=c.quality}else{media.muted=true;media.loop=true;media.playsInline=true;media.preload='none';media.dataset.src=c.src}
   const label=document.createElement('div');label.className='label';label.textContent=taskTitle(tasksById.get(c.task));
   const meta=document.createElement('div');meta.className='meta';meta.textContent=[c.cohort,c.axis,c.quality!=='unknown'?c.quality:null,c.id.startsWith('joint_pose:leap_')?c.lighting:null,c.outcome].filter(Boolean).join(' · ');
   tile.append(media,label,meta);tile.onclick=()=>expand(c);grid.append(tile)}
- for(const t of missing){const tile=document.createElement('div');tile.className='tile placeholder';const name=document.createElement('strong');name.textContent=taskTitle(t);const note=document.createElement('span');note.textContent=t.embodiment&&t.release_status==='unreleased'?'In development':'Current video unavailable';tile.append(name,note);grid.append(tile)}
+ for(const {task,videos} of missing){
+  const tile=document.createElement('div');tile.className='tile placeholder';
+  const name=document.createElement('strong');name.textContent=taskTitle(task);
+  const note=document.createElement('span');
+  note.textContent=axis==='nominal'?'Current nominal video unavailable':`${videos.length} of ${previewCount} verified ${axis} variation videos available`;
+  tile.append(name,note);grid.append(tile);
+ }
  observer=new IntersectionObserver(entries=>{for(const e of entries){const v=e.target;if(e.isIntersecting){if(!v.src)v.src=v.dataset.src;if(playing)v.play().catch(()=>{})}else v.pause()}},{rootMargin:'150px'});
  grid.querySelectorAll('video').forEach(v=>observer.observe(v));
 }
