@@ -8,7 +8,7 @@
 :root{color-scheme:dark;--bg:#10151e;--panel:#18212e;--line:#30425a;--ink:#e7eef7;--muted:#afc1d6;--accent:#8fcfff}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px system-ui,sans-serif}header,main{max-width:1480px;margin:auto;padding:16px clamp(14px,3vw,42px)}header{padding-bottom:0}nav{display:flex;gap:16px;flex-wrap:wrap}a{color:var(--accent)}h1{font-size:30px;margin:16px 0 6px}h2{font-size:21px;margin:0 0 6px}p{color:var(--muted);line-height:1.5;margin:6px 0 12px}button,select{font:inherit;color:var(--ink);background:#202d3e;border:1px solid #41556d;border-radius:5px;padding:7px 9px}button{cursor:pointer}:focus-visible{outline:2px solid var(--accent);outline-offset:3px}.toolbar,.controls,.legend{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.toolbar{margin:0 0 12px}.toolbar label{flex:1;display:flex;gap:10px;min-width:158px;align-items:center;color:var(--muted)}input[type=range]{width:min(400px,100%);min-width:70px;accent-color:#87bee9}.grid{display:grid;grid-template-columns:repeat(var(--columns,4),minmax(0,1fr));gap:10px}.tile{min-width:0;border:1px solid var(--line);background:var(--panel);border-radius:7px;overflow:hidden}.tile.selected{border-color:#ffe08b}.expand{display:block;width:100%;padding:0;border:0;border-radius:0;background:#0b1018}.expand video,.expand img{display:block;width:100%;aspect-ratio:16/11;object-fit:contain}.tile small{color:var(--muted)}.tile-footer{display:flex;justify-content:space-between;align-items:center;gap:4px;flex-wrap:wrap;padding:7px 8px}.tile-label{font-size:13px}.tile-footer button{font-size:12px;padding:4px 6px}#distribution{margin-top:26px}.scene{width:100%;height:clamp(340px,49vw,570px);display:block;background:#0d1520;border:1px solid var(--line);border-radius:7px;touch-action:none;cursor:grab}.controls{margin-bottom:10px}.controls label{color:var(--muted)}.legend{margin:10px 0 0;color:var(--muted)}.legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}.selected-info{font-variant-numeric:tabular-nums}dialog{width:min(100% - 32px,1000px);max-height:calc(100dvh - 24px);color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px}dialog::backdrop{background:#03070de8}.dialog-header{display:flex;justify-content:space-between;align-items:center;gap:12px}dialog video{width:100%;display:block;max-height:72dvh;margin-top:10px;background:#080d14}[hidden]{display:none!important}@media(max-width:780px){.grid{grid-template-columns:repeat(min(var(--columns,4),2),minmax(0,1fr))}}@media(max-width:365px){.grid{grid-template-columns:1fr}}
 </style>
-<script defer src="lighting.js?v=coverage-grid-1"></script>
+<script defer src="lighting.js?v=office-grid-1"></script>
 </head>
 <body>
 <header>
@@ -30,7 +30,7 @@
 <h2>Possible light positions</h2>
 <p id="distributionSummary">Each dot is a sampled overhead fixture. The outlined volume shows the sampler bounds.</p>
 <div class="controls">
-<label>Setup <select id="setup"><option value="">All setups</option></select></label>
+<label>Fixtures <select id="fixture"><option value="">Both fixtures</option><option value="primary">Primary</option><option value="secondary">Secondary</option></select></label>
 <button id="orbit" type="button">Oblique view</button><button id="top" type="button">Top view</button>
 </div>
 <canvas id="scene" class="scene" tabindex="0" aria-label="Orbitable 3D view of sampled light positions around the Round Insert workspace"></canvas>

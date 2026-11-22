@@ -2,13 +2,10 @@
 
 const $ = id => document.getElementById(id);
 const palette = {
-  centered: '#ffd880', offset: '#78c9ff', dominant: '#f5a882', secondary: '#bb9aff',
-  fill: '#83d8ae', robot: '#c4cfdb',
+  primary: '#78c9ff', secondary: '#df9aff', fill: '#83d8ae', robot: '#c4cfdb',
 };
-const roleLabels = {
-  centered: 'Centered overhead', offset: 'Off-center overhead', dominant: 'Pair · dominant',
-  secondary: 'Pair · secondary', fill: 'Fixed fill',
-};
+const roleLabels = {primary: 'Primary fixture', secondary: 'Secondary fixture',
+  fill: 'Bounce fill · varied strength'};
 const canvas = $('scene');
 const ctx = canvas.getContext('2d');
 let data, selected, yaw = -.8, elevation = .58, drag, hits = [];
@@ -76,17 +73,15 @@ function setPlaying(value) {
 
 function settingsText(clip) {
   const s = clip.settings;
-  const text = [
+  const white = s.warmth > .2 ? 'warm white' : s.warmth < -.2 ? 'cool white' : 'neutral white';
+  return [
     'Intensity ' + s.intensity.toFixed(2),
     'ambient ' + s.ambient.toFixed(2),
-    'height ' + s.height_m.toFixed(2) + ' m',
-    'bulb radius ' + s.radius_m.toFixed(2) + ' m',
-  ];
-  if (clip.setup !== 'centered_overhead') {
-    text.push('offset ' + s.offset_m.toFixed(2) + ' m', 'azimuth ' + s.azimuth_deg.toFixed(0) + '°');
-  }
-  text.push('RGB ' + [s.red, s.green, s.blue].map(value => value.toFixed(2)).join('/'));
-  return text.join(' · ');
+    'bounce fill ' + s.fill.toFixed(2),
+    white,
+    'secondary ' + Math.round(100 * s.secondary_share) + '%',
+    'fixture height ' + clip.lights[0].position[2].toFixed(2) + ' m',
+  ].join(' · ');
 }
 
 function showClip(clip, button) {
@@ -94,7 +89,8 @@ function showClip(clip, button) {
   resumeGrid = playing;
   setPlaying(false);
   $('clipTitle').textContent = clip.label;
-  $('clipSettings').textContent = settingsText(clip);
+  $('clipSettings').textContent = settingsText(clip) + ' · Readability passed on all ' +
+    clip.readability.frames + ' frames · seed ' + clip.seed;
   const video = $('clipVideo');
   video.poster = clip.poster;
   video.src = clip.video;
@@ -105,7 +101,6 @@ function showClip(clip, button) {
 
 function selectClip(clip, goToViewer = false) {
   selected = clip;
-  if ($('setup').value && $('setup').value !== clip.setup) $('setup').value = '';
   for (const tile of tiles.values()) {
     tile.node.classList.toggle('selected', clip.id === tile.clip.id);
     tile.rig.setAttribute('aria-pressed', clip.id === tile.clip.id);
@@ -170,10 +165,9 @@ function draw() {
   hits = [];
   const {target, table, robot, fill} = data.workspace;
   const [bottom, top] = data.ranges.height_m;
-  const [inner, outer] = data.ranges.offset_m;
-  const filter = $('setup').value;
-  const draws = data.distribution.filter(sample => !filter || sample.setup === filter);
-  const representatives = data.clips.filter(clip => !filter || clip.setup === filter);
+  const outer = data.ranges.radius_m;
+  const filter = $('fixture').value;
+  const draws = data.distribution;
   const ring = (r, z) => Array.from({length: 65}, (_, i) => [
     target[0] + r * Math.cos(i * Math.PI / 32), target[1] + r * Math.sin(i * Math.PI / 32), z,
   ]);
@@ -217,35 +211,31 @@ function draw() {
   line(corners, '#536d89', 1, '#1b2b3e');
   line(robot, palette.robot, 3);
   ctx.setLineDash([4, 4]);
-  if (filter !== 'centered_overhead') {
-    for (const radius of [inner, outer]) {
-      line(ring(radius, bottom), '#577a95');
-      line(ring(radius, top), '#577a95');
-      for (const index of [0, 16, 32, 48]) {
-        line([ring(radius, bottom)[index], ring(radius, top)[index]], '#42627b');
-      }
-    }
-  }
-  if (!filter || filter === 'centered_overhead') {
-    line([[...target.slice(0, 2), bottom], [...target.slice(0, 2), top]], palette.centered);
+  const lower = ring(outer, bottom), upper = ring(outer, top);
+  line(lower, '#577a95');
+  line(upper, '#577a95');
+  for (const index of [0, 16, 32, 48]) {
+    line([lower[index], upper[index]], '#42627b');
   }
   ctx.setLineDash([]);
   for (const sample of draws) {
-    for (const light of sample.points) marker(light.position, light.role, 2, .34);
+    for (const light of sample.points) {
+      if (!filter || light.role === filter) marker(light.position, light.role, 2, .34);
+    }
   }
   marker(fill, 'fill', 4);
-  for (const clip of representatives) {
+  for (const clip of data.clips) {
     const active = selected?.id === clip.id;
     for (const light of clip.lights) {
+      if (filter && light.role !== filter) continue;
       if (active) line([light.position, target], palette[light.role], light.share > .5 ? 2 : 1);
       marker(light.position, light.role, active ? 7 : 4, 1, active ? '#fff4c8' : '#16212f');
       hits.push({clip, point: project(light.position)});
     }
   }
-  $('distributionSummary').textContent = draws.length + ' sampled setups · height ' +
-    bottom.toFixed(2) + '–' + top.toFixed(2) + ' m' +
-    (filter !== 'centered_overhead' ? ' · off-center radius ' + inner.toFixed(2) + '–' + outer.toFixed(2) + ' m.' : '.') +
-    ' Outlined markers link to rendered clips. Drag or use arrow keys to orbit.';
+  $('distributionSummary').textContent = draws.length + ' sampler draws before readability screening · heights ' +
+    bottom.toFixed(2) + '–' + top.toFixed(2) + ' m · disk radius ' + outer.toFixed(2) + ' m. ' +
+    'Outlined markers link to passing renders. Drag or use arrow keys to orbit.';
 }
 
 function angle(nextYaw, nextElevation) {
@@ -261,11 +251,7 @@ $('time').addEventListener('input', () => {
   setPlaying(false);
 });
 $('tileSize').addEventListener('change', () => $('grid').style.setProperty('--columns', $('tileSize').value));
-$('setup').addEventListener('change', () => {
-  if ($('setup').value && selected?.setup !== $('setup').value) {
-    selectClip(data.clips.find(clip => clip.setup === $('setup').value));
-  } else draw();
-});
+$('fixture').addEventListener('change', draw);
 $('orbit').addEventListener('click', () => angle(-.8, .58));
 $('top').addEventListener('click', () => angle(-.8, Math.PI / 2));
 $('openSelected').addEventListener('click', () => showClip(selected, $('openSelected')));
@@ -305,7 +291,7 @@ canvas.addEventListener('keydown', event => {
 });
 new ResizeObserver(draw).observe(canvas);
 
-fetch('lighting.json', {cache: 'no-store'})
+fetch('lighting-office.json', {cache: 'no-store'})
   .then(response => {
     if (!response.ok) throw new Error('Lighting coverage could not load.');
     return response.json();
@@ -314,11 +300,9 @@ fetch('lighting.json', {cache: 'no-store'})
     data = payload;
     time = data.time;
     $('time').max = data.duration - 1 / 16;
-    $('summary').textContent = 'Round Insert · ' + data.clips.length + ' renders selected from ' +
-      data.candidate_count + ' candidates for spread in placement and appearance. Same rollout, camera, room, and materials.';
-    for (const [setup, label] of Object.entries(data.setups)) {
-      $('setup').append(new Option(label, setup));
-    }
+    $('summary').textContent = 'Round Insert · ' + data.clips.length + ' varied renders selected from ' +
+      data.passing_count + ' readable draws out of ' + data.candidate_count +
+      '. Same rollout, camera, room, and materials.';
     for (const [role, label] of Object.entries(roleLabels)) {
       const node = element('span');
       const dot = element('i');
