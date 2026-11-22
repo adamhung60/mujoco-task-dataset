@@ -1,508 +1,333 @@
 'use strict';
 
 const $ = id => document.getElementById(id);
-const ui = Object.fromEntries([
-  'cohort', 'task', 'release', 'family', 'categoryLabel', 'episode', 'coverage', 'baseline',
-  'families', 'histograms', 'brightness', 'brightnessPlot', 'examples', 'frames', 'rig',
-  'rigInfo', 'aggregate', 'episodeVideo', 'poseLink', 'releaseLabel',
-  'comparisonSection', 'comparisonTitle', 'comparisonInfo', 'comparison', 'compareTime', 'compareTimeLabel',
-  'comparePlay', 'compareRestart',
-].map(id => [id, $(id)]));
-const labels = {
-  intensity: 'Intensity', ambient: 'Ambient', red: 'Red', green: 'Green', blue: 'Blue',
-  height_m: 'Ceiling height (m)', radius_m: 'Bulb radius (m)',
-  azimuth_deg: 'Light azimuth (°)', offset_m: 'Horizontal offset (m)',
+const palette = {
+  centered: '#ffd880', offset: '#78c9ff', dominant: '#f5a882', secondary: '#bb9aff',
+  fill: '#83d8ae', robot: '#c4cfdb',
 };
-const colors = {indoor: '#ffc477', daylight: '#8fcfff', mixed: '#84d3b3'};
-const count = value => value.toLocaleString();
-const percent = share => (100 * share).toFixed(1) + '%';
-const name = value => value.replaceAll('_', ' ');
-const numeric = value => Number.isFinite(value);
-const cohortKind = () => data.cohorts.find(cohort => cohort.label === ui.cohort.value)?.kind;
-const categoryKey = () => cohortKind() === 'indoor_comparison' ? 'setup' : 'family';
-const categoryName = key => data.indoor_setups?.[key] ?? key;
-const lightingName = row => categoryName(row.settings.setup ?? row.settings.family) ?? 'family unavailable';
-let data, choices = [], current = [], selected, exampleIds = new Set(), emitterGroups = [];
-let yaw = -.7, elevation = .6;
-const ctx = ui.rig.getContext('2d');
+const roleLabels = {
+  centered: 'Centered overhead', offset: 'Off-center overhead', dominant: 'Pair · dominant',
+  secondary: 'Pair · secondary', fill: 'Fixed fill',
+};
+const canvas = $('scene');
+const ctx = canvas.getContext('2d');
+let data, selected, yaw = -.8, elevation = .58, drag, hits = [];
+let playing = true, time = 0, last = 0, returnTo, resumeGrid;
+const tiles = new Map();
 
-function el(tag, text, className) {
+function element(tag, content, className) {
   const node = document.createElement(tag);
-  if (text !== undefined) node.textContent = text;
+  if (content) node.textContent = content;
   if (className) node.className = className;
   return node;
 }
 
-function options(select, rows, fallback = '') {
-  const previous = select.value;
-  select.replaceChildren(...rows.map(([value, label]) => new Option(label, value)));
-  select.value = rows.some(([value]) => value === previous) ? previous : fallback;
+function timeToShow() {
+  return Math.min(time, data.duration - 1 / 16);
 }
 
-function distinct(rows, field) {
-  return [...new Set(rows.map(row => row[field]).filter(Boolean))].sort();
-}
-
-function renderSettings(rows, cohortRows, production) {
-  ui.families.replaceChildren();
-  const key = categoryKey();
-  const categories = key === 'setup' ? data.setup_shares : data.families;
-  const known = cohortRows.filter(row => Object.hasOwn(categories, row.settings[key]));
-  for (const [category, expected] of Object.entries(categories)) {
-    const n = known.filter(row => row.settings[key] === category).length;
-    const share = known.length ? n / known.length : 0;
-    const bar = el('div', undefined, 'track');
-    const fill = el('i');
-    fill.style.width = percent(share);
-    fill.style.background = colors[category] ?? colors.indoor;
-    bar.append(fill);
-    if (production) {
-      const target = el('b');
-      target.style.left = percent(expected);
-      target.title = percent(expected) + ' configured';
-      bar.append(target);
-    }
-    const item = el('div', undefined, 'family-row');
-    const stats = el('span', known.length ? count(n) + ' · ' + percent(share) : '—', 'stats');
-    if (production) stats.append(el('br'), el('small', percent(expected) + ' config.'));
-    item.append(el('span', categoryName(category)), bar, stats);
-    ui.families.append(item);
+function syncTile(tile) {
+  if (!tile.visible) {
+    tile.video.pause();
+    return;
   }
-
-  ui.histograms.replaceChildren();
-  const ranges = key === 'setup' ? data.indoor_ranges : data.ranges;
-  for (const [field, configured] of Object.entries(ranges)) {
-    const relevant = ['azimuth_deg', 'offset_m'].includes(field)
-      ? rows.filter(row => row.settings.setup !== 'centered_overhead') : rows;
-    const values = relevant.map(row => row.settings[field]).filter(numeric);
-    const low = Math.min(configured[0], ...values);
-    const high = Math.max(configured[1], ...values);
-    const panel = histogram(labels[field], values, low, high, 2);
-    panel.append(
-      el('small', count(values.length) + ' / ' + count(relevant.length) + ' recorded'));
-    if (production) {
-      panel.append(el('br'), el('small', 'Configured ' + configured.join('–')));
-    }
-    ui.histograms.append(panel);
+  if (!tile.video.getAttribute('src')) {
+    tile.video.preload = 'auto';
+    tile.video.src = tile.clip.video;
+  }
+  if (tile.video.readyState < 2) return;
+  const target = timeToShow();
+  if (!tile.video.seeking && Math.abs(tile.video.currentTime - target) > (playing ? .24 : .04)) {
+    tile.video.currentTime = target;
+  }
+  if (!playing) tile.video.pause();
+  else if (tile.video.paused && !tile.starting) {
+    tile.starting = true;
+    tile.video.play().catch(error => {
+      if (error.name !== 'NotAllowedError') return;
+      playing = false;
+      $('play').textContent = 'Play grid';
+      $('status').textContent = 'Select Play grid to start the muted previews.';
+    }).finally(() => { tile.starting = false; });
   }
 }
 
-function histogram(label, values, low, high, precision) {
-  const bins = Array(12).fill(0);
-  for (const value of values) bins[Math.min(11, Math.floor(12 * (value - low) / (high - low)))]++;
-  const plot = el('div', undefined, 'plot');
-  const max = Math.max(1, ...bins);
-  const step = (high - low) / bins.length;
-  plot.setAttribute('role', 'img');
-  plot.setAttribute('aria-label', label + ' histogram. Bin counts ' + bins.join(', '));
-  bins.forEach((total, index) => {
-    const bin = el('i');
-    bin.style.height = percent(total / max);
-    bin.title = (low + index * step).toFixed(precision) + '–' +
-      (low + (index + 1) * step).toFixed(precision) + ' · ' + count(total);
-    plot.append(bin);
+function updateTime() {
+  $('time').value = timeToShow();
+  $('timeLabel').value = timeToShow().toFixed(2) + ' s';
+  tiles.forEach(syncTile);
+}
+
+function tick(now) {
+  if (playing && last && [...tiles.values()].some(tile => tile.visible)) {
+    time = (time + Math.min(.2, (now - last) / 1000)) % data.duration;
+    updateTime();
+  }
+  last = now;
+  requestAnimationFrame(tick);
+}
+
+function setPlaying(value) {
+  playing = value;
+  $('play').textContent = value ? 'Pause grid' : 'Play grid';
+  if (value) $('status').textContent = '';
+  updateTime();
+}
+
+function settingsText(clip) {
+  const s = clip.settings;
+  const text = [
+    'Intensity ' + s.intensity.toFixed(2),
+    'ambient ' + s.ambient.toFixed(2),
+    'height ' + s.height_m.toFixed(2) + ' m',
+    'bulb radius ' + s.radius_m.toFixed(2) + ' m',
+  ];
+  if (clip.setup !== 'centered_overhead') {
+    text.push('offset ' + s.offset_m.toFixed(2) + ' m', 'azimuth ' + s.azimuth_deg.toFixed(0) + '°');
+  }
+  text.push('RGB ' + [s.red, s.green, s.blue].map(value => value.toFixed(2)).join('/'));
+  return text.join(' · ');
+}
+
+function showClip(clip, button) {
+  returnTo = button;
+  resumeGrid = playing;
+  setPlaying(false);
+  $('clipTitle').textContent = clip.label;
+  $('clipSettings').textContent = settingsText(clip);
+  const video = $('clipVideo');
+  video.poster = clip.poster;
+  video.src = clip.video;
+  video.onloadedmetadata = () => { video.currentTime = timeToShow(); };
+  $('player').showModal();
+  video.play().catch(() => {});
+}
+
+function selectClip(clip, goToViewer = false) {
+  selected = clip;
+  if ($('setup').value && $('setup').value !== clip.setup) $('setup').value = '';
+  for (const tile of tiles.values()) {
+    tile.node.classList.toggle('selected', clip.id === tile.clip.id);
+    tile.rig.setAttribute('aria-pressed', clip.id === tile.clip.id);
+  }
+  $('selected').textContent = clip.label + ' · ' + settingsText(clip);
+  draw();
+  if (goToViewer) $('distribution').scrollIntoView({block: 'start'});
+}
+
+function makeGrid() {
+  const observer = new IntersectionObserver(entries => {
+    for (const entry of entries) {
+      const tile = tiles.get(entry.target.dataset.id);
+      tile.visible = entry.isIntersecting;
+      syncTile(tile);
+    }
   });
-  const scale = el('small', undefined, 'scale');
-  scale.append(el('span', low.toFixed(precision)), el('span', high.toFixed(precision)));
-  const panel = el('article', undefined, 'histogram');
-  panel.append(el('h3', label), plot, scale);
-  return panel;
-}
-
-function cameraExamples() {
-  ui.examples.replaceChildren();
-  ui.brightnessPlot.replaceChildren();
-  exampleIds = new Set();
-  const measured = current.filter(row => numeric(row.brightness))
-    .sort((a, b) => a.brightness - b.brightness);
-  ui.brightness.textContent = measured.length
-    ? count(measured.length) + ' / ' + count(current.length) +
-      (data.brightness_sample_hz ? ' previews measured at ' + data.brightness_sample_hz + ' frames per second.'
-        : ' episodes measured.') +
-      ' Each value is the lowest sampled mean RGB (0–255) in the fixed task-area crop.'
-    : 'Task-area brightness measurements are unavailable for this selection.';
-  ui.brightnessPlot.hidden = !measured.length;
-  if (!measured.length) return;
-  const low = Math.floor(measured[0].brightness);
-  const high = Math.max(low + 1, Math.ceil(measured.at(-1).brightness));
-  ui.brightnessPlot.append(histogram('Lowest task-area RGB mean per episode',
-    measured.map(row => row.brightness), low, high, 1));
-
-  const choices = new Map();
-  for (const [label, index] of [
-    ['Darkest', 0], ['Median', Math.floor(measured.length / 2)], ['Brightest', measured.length - 1],
-  ]) {
-    const row = measured[index];
-    if (choices.has(row)) choices.get(row).push(label);
-    else choices.set(row, [label]);
-  }
-  for (const [row, marks] of choices) {
-    exampleIds.add(row.id);
-    const button = el('button');
+  for (const clip of data.clips) {
+    const node = element('article', null, 'tile');
+    node.dataset.id = clip.id;
+    const button = element('button', null, 'expand');
     button.type = 'button';
-    if (row.frames?.length) button.append(image(row.frames[0]));
-    button.append(el('strong', marks.join(' / ') + ' · ' + row.brightness.toFixed(1)),
-      el('br'), el('small', name(row.task) + ' · ' + lightingName(row)));
-    button.addEventListener('click', () => {
-      ui.episode.value = row.id;
-      inspect();
-    });
-    ui.examples.append(button);
+    button.setAttribute('aria-label', 'Open ' + clip.label);
+    const video = element('video');
+    video.muted = true;
+    video.playsInline = true;
+    video.loop = true;
+    video.preload = 'none';
+    video.poster = clip.poster;
+    video.addEventListener('canplay', () => syncTile(tiles.get(clip.id)));
+    video.addEventListener('error', () => {
+      if (!video.getAttribute('src')) return;
+      $('status').textContent = 'A preview video could not load. Its still frame is available.';
+      const poster = element('img');
+      poster.alt = clip.label;
+      poster.src = clip.poster;
+      video.replaceWith(poster);
+    }, {once: true});
+    button.append(video);
+    button.addEventListener('click', () => showClip(clip, button));
+    const rig = element('button', 'Show lights');
+    rig.type = 'button';
+    rig.setAttribute('aria-label', 'Show lights for ' + clip.label);
+    rig.addEventListener('click', () => selectClip(clip, true));
+    const footer = element('div', null, 'tile-footer');
+    footer.append(element('strong', clip.label, 'tile-label'), rig);
+    node.append(button, footer);
+    $('grid').append(node);
+    tiles.set(clip.id, {node, rig, video, clip, visible: false});
+    observer.observe(node);
   }
 }
 
-function image(frame) {
-  const img = el('img');
-  img.src = frame.src;
-  img.alt = frame.label;
-  img.loading = 'lazy';
-  return img;
-}
-
-function sourceChanged() {
-  const source = data.cohorts.find(cohort => cohort.label === ui.cohort.value);
-  const comparison = data.cohorts.find(cohort => cohort.kind === 'indoor_comparison');
-  const allPublished = data.all_cohort && source?.label === data.all_cohort;
-  choices = data.episodes.filter(row => row.cohort === source?.label ||
-    (allPublished && row.cohort !== comparison?.label));
-  options(ui.task, [['', 'All tasks'], ...distinct(choices, 'task').map(task => [task, name(task)])]);
-  ui.poseLink.hidden = !(data.pose_viewer || data.cohorts.some(cohort => cohort.kind === 'preview'));
-  const indoors = categoryKey() === 'setup';
-  ui.categoryLabel.textContent = indoors ? 'Indoor setup' : 'Light family';
-  options(ui.family, [['', indoors ? 'All setups' : 'All families'],
-    ...Object.keys(indoors ? data.setup_shares : data.families).map(key => [key, categoryName(key)])]);
-  ui.baseline.textContent = indoors
-    ? 'One comparison clip per indoor setup. White ticks show equal sampling in the current randomizer.'
-    : source?.kind === 'preview'
-    ? 'Designed review examples. Each preview is a rendered setting.'
-    : source?.kind === 'public_preview'
-      ? 'Previously published Joint previews. White ticks show the sampler mix used for those previews.'
-      : 'One vote per completed episode. White ticks show the configured family mix.';
-  taskChanged();
-}
-
-function taskChanged() {
-  const taskRows = choices.filter(row => !ui.task.value || ui.task.value === row.task);
-  const releases = distinct(taskRows, 'release');
-  ui.releaseLabel.hidden = !ui.task.value || releases.length < 2;
-  options(ui.release, [['', 'All releases'], ...releases.map(release => [release, release.slice(0, 12)])]);
-  if (ui.releaseLabel.hidden) ui.release.value = '';
-  filter();
-}
-
-function filter() {
-  const rows = choices.filter(row => (!ui.task.value || row.task === ui.task.value) &&
-    (!ui.release.value || row.release === ui.release.value));
-  const key = categoryKey();
-  current = rows.filter(row => !ui.family.value || row.settings[key] === ui.family.value);
-  const kind = cohortKind();
-  const n = current.filter(row => row.settings[key]).length;
-  const total = count(current.length) + (kind?.includes('preview') || key === 'setup' ? ' previews' : ' episodes');
-  ui.coverage.textContent = current.length
-    ? count(n) + ' / ' + total + (key === 'setup' ? ' with an indoor setup' : ' with a recorded light family')
-    : 'No matching lighting records. Configured settings are shown below.';
-  renderSettings(current, rows, kind !== 'preview');
-  cameraExamples();
-  const example = current.find(row => exampleIds.has(row.id) && row.frames?.length) || current[0];
-  options(ui.episode, example ? current.map(row => [
-    row.id, name(row.task) + ' · ' + (key === 'setup' ? lightingName(row) :
-      row.id.split(':').at(-1).split('/').slice(-2).join('/')),
-  ]) : [['', 'No matches']], example?.id ?? '');
-  ui.episode.disabled = !example;
-  emitterGroups = groupEmitters(current);
-  ui.aggregate.disabled = !emitterGroups.length;
-  inspect();
-}
-
-function inspect() {
-  selected = current.find(row => row.id === ui.episode.value);
-  ui.frames.replaceChildren();
-  const aggregate = ui.aggregate.getAttribute('aria-pressed') === 'true';
-  const n = current.filter(row => row.lights?.length).length;
-  ui.rigInfo.textContent = aggregate
-    ? count(n) + ' / ' + count(current.length) + ' records with scene lights. Marker size tracks record count.'
-    : selected?.lights?.length
-      ? selected.lights.length + ' world lights · ' + lightingName(selected) +
-        (selected.robot ? '' : ' · robot base shown')
-      : 'Saved light positions are unavailable for this selection.';
-  for (const frame of selected?.frames ?? []) {
-    const figure = el('figure');
-    figure.append(image(frame), el('figcaption', frame.label));
-    ui.frames.append(figure);
-  }
-  if (selected?.video !== ui.episodeVideo.dataset.source) {
-    ui.episodeVideo.pause();
-    if (selected?.video) {
-      ui.episodeVideo.src = selected.video;
-      ui.episodeVideo.dataset.source = selected.video;
-    } else {
-      ui.episodeVideo.removeAttribute('src');
-      delete ui.episodeVideo.dataset.source;
-    }
-    ui.episodeVideo.load();
-  }
-  ui.episodeVideo.hidden = !selected?.video;
-  drawRig();
-}
-
-function groupEmitters(rows) {
-  const groups = new Map();
-  for (const row of rows) for (const light of row.lights ?? []) {
-    const [x, y, z] = light.position;
-    const key = [light.name, Math.round(x * 20), Math.round(y * 20)].join('/');
-    if (!groups.has(key)) groups.set(key, {...light, low: z, high: z, ids: new Set()});
-    const group = groups.get(key);
-    group.low = Math.min(group.low, z);
-    group.high = Math.max(group.high, z);
-    group.ids.add(row.id);
-  }
-  return [...groups.values()].map(({ids, ...group}) => ({
-    ...group, count: ids.size, position: [...group.position.slice(0, 2), (group.low + group.high) / 2],
-  }));
-}
-
-function drawRig() {
-  const {width, height} = ui.rig.getBoundingClientRect();
-  const ratio = window.devicePixelRatio || 1;
-  ui.rig.width = width * ratio;
-  ui.rig.height = height * ratio;
-  ctx.scale(ratio, ratio);
-  const aggregate = ui.aggregate.getAttribute('aria-pressed') === 'true';
-  const lights = aggregate ? emitterGroups : selected?.lights ?? [];
-  const table = selected?.table;
-  const robot = selected?.robot ?? [];
-  const corners = table ? [[-1,-1], [1,-1], [1,1], [-1,1]].map(([x, y]) => [
+function draw() {
+  if (!data) return;
+  const {width, height} = canvas.getBoundingClientRect();
+  const dpr = devicePixelRatio || 1;
+  canvas.width = width * dpr;
+  canvas.height = height * dpr;
+  ctx.scale(dpr, dpr);
+  hits = [];
+  const {target, table, robot, fill} = data.workspace;
+  const [bottom, top] = data.ranges.height_m;
+  const [inner, outer] = data.ranges.offset_m;
+  const filter = $('setup').value;
+  const draws = data.distribution.filter(sample => !filter || sample.setup === filter);
+  const representatives = data.clips.filter(clip => !filter || clip.setup === filter);
+  const ring = (r, z) => Array.from({length: 65}, (_, i) => [
+    target[0] + r * Math.cos(i * Math.PI / 32), target[1] + r * Math.sin(i * Math.PI / 32), z,
+  ]);
+  const corners = [[-1,-1], [1,-1], [1,1], [-1,1]].map(([x, y]) => [
     table[0][0] + x * table[1][0], table[0][1] + y * table[1][1], table[0][2] + table[1][2],
-  ]) : [];
-  const base = selected?.robot_base;
-  const points = [...corners, ...robot.flat(), ...(base ? [base] : []), ...lights.flatMap(light => [
-    light.position, ...(aggregate ? [[...light.position.slice(0,2), light.low],
-      [...light.position.slice(0,2), light.high]] : []),
-  ])];
-  if (!points.length) return;
+  ]);
   const raw = ([x, y, z]) => [
     -Math.sin(yaw) * x + Math.cos(yaw) * y,
     Math.sin(elevation) * (Math.cos(yaw) * x + Math.sin(yaw) * y) - Math.cos(elevation) * z,
   ];
-  const projections = points.map(raw);
-  const bounds = [0, 1].map(i => [
-    Math.min(...projections.map(point => point[i])), Math.max(...projections.map(point => point[i])),
-  ]);
-  const scale = Math.min((width - 112) / Math.max(1, bounds[0][1] - bounds[0][0]),
-    (height - 64) / Math.max(1, bounds[1][1] - bounds[1][0]));
+  const extents = [...corners, ...ring(outer, bottom), ...ring(outer, top), ...robot].map(raw);
+  const [lo, hi] = [Math.min, Math.max].map(fn => [0, 1].map(axis => fn(...extents.map(p => p[axis]))));
+  const scale = Math.min((width - 54) / (hi[0] - lo[0]), (height - 42) / (hi[1] - lo[1]));
   const project = point => raw(point).map((value, i) =>
-    (value - (bounds[i][0] + bounds[i][1]) / 2) * scale + [width, height][i] / 2);
-  function path(points, color, width = 1, fill) {
+    (value - (lo[i] + hi[i]) / 2) * scale + [width, height][i] / 2);
+  function line(points, color, width = 1, fillStyle) {
     ctx.beginPath();
-    points.forEach((point, i) => i ? ctx.lineTo(...point) : ctx.moveTo(...point));
-    if (fill) {
+    points.map(project).forEach((point, index) => index ? ctx.lineTo(...point) : ctx.moveTo(...point));
+    if (fillStyle) {
       ctx.closePath();
-      ctx.fillStyle = fill;
+      ctx.fillStyle = fillStyle;
       ctx.fill();
     }
     ctx.strokeStyle = color;
     ctx.lineWidth = width;
     ctx.stroke();
   }
-  if (corners.length) path(corners.map(project), '#536d89', 1, '#1b2b3e');
-  for (const segment of robot) path(segment.map(project), '#7189a3', 2);
-  ctx.font = '12px system-ui';
-  if (base) {
-    const p = project(base);
-    ctx.fillStyle = '#a6bad1';
-    ctx.fillRect(p[0] - 4, p[1] - 4, 8, 8);
-    ctx.fillText('Robot base', p[0] + 7, p[1] + 4);
-  }
-  const maxCount = Math.max(1, ...lights.map(light => light.count || 1));
-  for (const light of lights) {
-    const point = project(light.position);
-    const color = light.name.includes('daylight') ? colors.daylight :
-      light.name.includes('ceiling') ? colors.indoor : colors.mixed;
-    if (aggregate) {
-      const [x, y] = light.position;
-      path([project([x, y, light.low]), project([x, y, light.high])], color, 2);
-    } else {
-      const norm = Math.hypot(...light.direction);
-      if (norm > 0) {
-        const target = project(light.position.map((value, i) => value + .5 * light.direction[i] / norm));
-        const aim = Math.atan2(target[1] - point[1], target[0] - point[0]);
-        path([point, target], color, 1.5);
-        path([-0.5, 0, 0.5].map((delta, i) => i === 1 ? target : [
-          target[0] - 7 * Math.cos(aim + delta), target[1] - 7 * Math.sin(aim + delta),
-        ]), color, 1.5);
-      }
-    }
-    const radius = aggregate ? 4 + 10 * Math.sqrt(light.count / maxCount) : 6;
-    ctx.fillStyle = color;
+  function marker(position, role, radius, opacity = 1, outline) {
+    ctx.globalAlpha = opacity;
     ctx.beginPath();
-    ctx.arc(...point, radius, 0, Math.PI * 2);
+    ctx.arc(...project(position), radius, 0, 2 * Math.PI);
+    ctx.fillStyle = palette[role];
     ctx.fill();
-    const label = aggregate ? count(light.count) : name(light.name.replace(/^(dataset|office)_/, ''));
-    ctx.fillText(label, point[0] + radius + 4, point[1] - 4);
-  }
-}
-
-function setupComparison(rows) {
-  if (!rows.length) return;
-  ui.comparisonSection.hidden = false;
-  const indoors = Boolean(rows[0].settings.setup);
-  if (indoors) ui.comparisonTitle.textContent = 'Compare the three indoor setups';
-  ui.comparisonInfo.textContent = name(rows[0].task) +
-    (indoors ? ' · Same motion, camera, room, surfaces, and total light strength. The pair splits light 80/20.' :
-      ' · Same saved motion, camera, room, and surfaces.') + ' Starts at ' + rows[0].phase + '.';
-  const videos = [];
-  const durations = [];
-  const start = rows[0].time;
-  let playing = false;
-  function timeLabel(time) {
-    ui.compareTimeLabel.value = time.toFixed(2) + ' s';
-  }
-  function seek(value) {
-    const time = Number(value);
-    ui.compareTime.value = time;
-    timeLabel(time);
-    for (const video of videos) {
-      if (video.readyState >= 1) video.currentTime = Math.min(time, video.duration);
+    if (outline) {
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = 1.7;
+      ctx.stroke();
     }
+    ctx.globalAlpha = 1;
   }
-  function pause() {
-    playing = false;
-    videos.forEach(video => video.pause());
-    ui.comparePlay.textContent = 'Play comparison';
-  }
-  ui.compareTime.max = start;
-  ui.compareTime.value = start;
-  for (const row of rows) {
-    const figure = el('figure');
-    const video = el('video');
-    video.src = row.video;
-    video.preload = 'auto';
-    video.muted = true;
-    video.playsInline = true;
-    video.addEventListener('loadedmetadata', () => {
-      durations.push(video.duration);
-      ui.compareTime.max = Math.min(...durations);
-      seek(ui.compareTime.value);
-    });
-    videos.push(video);
-    figure.append(video, el('figcaption', indoors ? lightingName(row) : [
-      row.settings.family, numeric(row.settings.intensity) ? 'intensity ' +
-      row.settings.intensity.toFixed(2) : null,
-    ].filter(Boolean).join(' · ')));
-    if (indoors) {
-      const actions = el('div', undefined, 'compare-actions');
-      const inspectButton = el('button', 'Inspect rig');
-      inspectButton.addEventListener('click', () => {
-        ui.cohort.value = row.cohort;
-        ui.task.value = '';
-        ui.family.value = '';
-        sourceChanged();
-        ui.episode.value = row.id;
-        inspect();
-        ui.rig.focus();
-      });
-      const expand = el('button', 'Full screen');
-      expand.addEventListener('click', async () => {
-        pause();
-        video.controls = true;
-        if (video.requestFullscreen) {
-          try {
-            await video.requestFullscreen();
-          } catch {
-            video.controls = false;
-          }
-        } else if (video.webkitEnterFullscreen) {
-          video.webkitEnterFullscreen();
-        }
-      });
-      video.addEventListener('fullscreenchange', () => {
-        if (document.fullscreenElement) return;
-        pause();
-        video.controls = false;
-        seek(ui.compareTime.value);
-        expand.focus();
-      });
-      actions.append(inspectButton, expand);
-      figure.append(actions);
-    }
-    ui.comparison.append(figure);
-  }
-  const lead = videos[0];
-  lead.addEventListener('timeupdate', () => {
-    if (!playing || lead.seeking) return;
-    ui.compareTime.value = lead.currentTime;
-    timeLabel(lead.currentTime);
-    for (const video of videos.slice(1)) {
-      if (!video.seeking && Math.abs(video.currentTime - lead.currentTime) > .2) {
-        video.currentTime = lead.currentTime;
+  line(corners, '#536d89', 1, '#1b2b3e');
+  line(robot, palette.robot, 3);
+  ctx.setLineDash([4, 4]);
+  if (filter !== 'centered_overhead') {
+    for (const radius of [inner, outer]) {
+      line(ring(radius, bottom), '#577a95');
+      line(ring(radius, top), '#577a95');
+      for (const index of [0, 16, 32, 48]) {
+        line([ring(radius, bottom)[index], ring(radius, top)[index]], '#42627b');
       }
     }
-  });
-  lead.addEventListener('ended', pause);
-  ui.comparePlay.addEventListener('click', async () => {
-    if (playing) {
-      pause();
-      return;
+  }
+  if (!filter || filter === 'centered_overhead') {
+    line([[...target.slice(0, 2), bottom], [...target.slice(0, 2), top]], palette.centered);
+  }
+  ctx.setLineDash([]);
+  for (const sample of draws) {
+    for (const light of sample.points) marker(light.position, light.role, 2, .34);
+  }
+  marker(fill, 'fill', 4);
+  for (const clip of representatives) {
+    const active = selected?.id === clip.id;
+    for (const light of clip.lights) {
+      if (active) line([light.position, target], palette[light.role], light.share > .5 ? 2 : 1);
+      marker(light.position, light.role, active ? 7 : 4, 1, active ? '#fff4c8' : '#16212f');
+      hits.push({clip, point: project(light.position)});
     }
-    if (lead.ended) seek(0);
-    playing = true;
-    ui.comparePlay.textContent = 'Pause comparison';
-    try {
-      await Promise.all(videos.map(video => video.play()));
-    } catch {
-      pause();
-    }
-  });
-  ui.compareRestart.addEventListener('click', () => seek(0));
-  ui.compareTime.addEventListener('input', () => {
-    pause();
-    seek(ui.compareTime.value);
-  });
-  seek(start);
+  }
+  $('distributionSummary').textContent = draws.length + ' sampled setups · height ' +
+    bottom.toFixed(2) + '–' + top.toFixed(2) + ' m' +
+    (filter !== 'centered_overhead' ? ' · off-center radius ' + inner.toFixed(2) + '–' + outer.toFixed(2) + ' m.' : '.') +
+    ' Outlined markers link to rendered clips. Drag or use arrow keys to orbit.';
 }
 
-ui.cohort.addEventListener('change', sourceChanged);
-ui.task.addEventListener('change', taskChanged);
-ui.release.addEventListener('change', filter);
-ui.family.addEventListener('change', filter);
-ui.episode.addEventListener('change', inspect);
-ui.aggregate.addEventListener('click', () => {
-  ui.aggregate.setAttribute('aria-pressed', ui.aggregate.getAttribute('aria-pressed') !== 'true');
-  inspect();
+function angle(nextYaw, nextElevation) {
+  yaw = nextYaw;
+  elevation = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, nextElevation));
+  draw();
+}
+
+$('play').addEventListener('click', () => setPlaying(!playing));
+$('restart').addEventListener('click', () => { time = 0; updateTime(); });
+$('time').addEventListener('input', () => {
+  time = Number($('time').value);
+  setPlaying(false);
 });
-ui.rig.addEventListener('pointerdown', event => ui.rig.setPointerCapture(event.pointerId));
-ui.rig.addEventListener('pointermove', event => {
-  if (!ui.rig.hasPointerCapture(event.pointerId)) return;
-  yaw += event.movementX * .009;
-  elevation = Math.max(-1.4, Math.min(1.4, elevation + event.movementY * .009));
-  drawRig();
+$('tileSize').addEventListener('change', () => $('grid').style.setProperty('--columns', $('tileSize').value));
+$('setup').addEventListener('change', () => {
+  if ($('setup').value && selected?.setup !== $('setup').value) {
+    selectClip(data.clips.find(clip => clip.setup === $('setup').value));
+  } else draw();
 });
-ui.rig.addEventListener('keydown', event => {
-  const directions = {ArrowLeft: [-.12,0], ArrowRight: [.12,0], ArrowDown: [0,.12], ArrowUp: [0,-.12]};
-  if (!Object.hasOwn(directions, event.key)) return;
+$('orbit').addEventListener('click', () => angle(-.8, .58));
+$('top').addEventListener('click', () => angle(-.8, Math.PI / 2));
+$('player').addEventListener('close', () => {
+  $('clipVideo').pause();
+  $('clipVideo').removeAttribute('src');
+  $('clipVideo').load();
+  setPlaying(resumeGrid);
+  returnTo.focus({preventScroll: true});
+});
+canvas.addEventListener('pointerdown', event => {
+  canvas.setPointerCapture(event.pointerId);
+  drag = {x: event.clientX, y: event.clientY, distance: 0};
+});
+canvas.addEventListener('pointermove', event => {
+  if (!drag || !canvas.hasPointerCapture(event.pointerId)) return;
+  const dx = event.clientX - drag.x, dy = event.clientY - drag.y;
+  drag = {x: event.clientX, y: event.clientY, distance: drag.distance + Math.hypot(dx, dy)};
+  if (drag.distance > 4) angle(yaw + dx * .01, elevation + dy * .01);
+});
+canvas.addEventListener('pointerup', event => {
+  if (drag?.distance < 5) {
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left, y = event.clientY - rect.top;
+    const sorted = hits.map(hit => ({...hit, distance: Math.hypot(x - hit.point[0], y - hit.point[1])}))
+      .sort((a, b) => a.distance - b.distance);
+    if (sorted[0]?.distance < 11) selectClip(sorted[0].clip);
+  }
+  drag = null;
+});
+canvas.addEventListener('pointercancel', () => { drag = null; });
+canvas.addEventListener('keydown', event => {
+  const steps = {ArrowLeft: [-.14, 0], ArrowRight: [.14, 0], ArrowUp: [0, -.14], ArrowDown: [0, .14]};
+  if (!Object.hasOwn(steps, event.key)) return;
   event.preventDefault();
-  yaw += directions[event.key][0];
-  elevation = Math.max(-1.4, Math.min(1.4, elevation + directions[event.key][1]));
-  drawRig();
+  angle(yaw + steps[event.key][0], elevation + steps[event.key][1]);
 });
-new ResizeObserver(drawRig).observe(ui.rig);
+new ResizeObserver(draw).observe(canvas);
 
 fetch('lighting.json', {cache: 'no-store'})
   .then(response => {
-    if (!response.ok) throw new Error('HTTP ' + response.status);
+    if (!response.ok) throw new Error('Lighting coverage could not load.');
     return response.json();
   })
   .then(payload => {
     data = payload;
-    const populated = new Set(data.episodes.map(row => row.cohort));
-    const source = data.cohorts.find(cohort => cohort.label === data.all_cohort || populated.has(cohort.label))
-      ?? data.cohorts[0];
-    options(ui.cohort, data.cohorts.length
-      ? data.cohorts.map(cohort => [cohort.label, cohort.label]) : [['', 'Configured sampler']],
-      source?.label ?? '');
-      sourceChanged();
-    setupComparison(data.comparison);
+    time = data.time;
+    $('time').max = data.duration - 1 / 16;
+    $('summary').textContent = 'Round Insert · ' + data.clips.length + ' renders selected from ' +
+      data.candidate_count + ' candidates for spread in placement and appearance. Same rollout, camera, room, and materials.';
+    for (const [setup, label] of Object.entries(data.setups)) {
+      $('setup').append(new Option(label, setup));
+    }
+    for (const [role, label] of Object.entries(roleLabels)) {
+      const node = element('span');
+      const dot = element('i');
+      dot.style.background = palette[role];
+      node.append(dot, label);
+      $('legend').append(node);
+    }
+    makeGrid();
+    selectClip(data.clips[0]);
+    $('status').textContent = '';
+    updateTime();
+    requestAnimationFrame(tick);
   })
-  .catch(error => {
-    ui.coverage.textContent = 'Lighting data could not be loaded (' + error.message + ').';
-  });
+  .catch(error => { $('status').textContent = error.message; });
