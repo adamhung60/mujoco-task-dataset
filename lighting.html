@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lighting coverage · Robot task dataset</title>
+<style>
+:root{color-scheme:dark;--bg:#10151e;--panel:#18212e;--edge:#2c3c50;--ink:#e7eef7;--muted:#acbed3;--accent:#8fcfff;--warm:#ffc477;--neutral:#84d3b3}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px system-ui,sans-serif}main,header{max-width:1480px;margin:auto;padding:18px clamp(14px,3vw,42px)}header{padding-bottom:0}nav{display:flex;gap:18px;flex-wrap:wrap}a{color:var(--accent)}h1{font-size:30px;margin:20px 0 12px}h2{font-size:18px;margin:0 0 10px}h3{font-size:13px;margin:0 0 5px}p{color:var(--muted);line-height:1.5;margin:6px 0 12px}small{color:var(--muted)}label{display:grid;gap:5px;color:var(--muted);font-size:12px}select,button{font:inherit;color:var(--ink);background:#202d3e;border:1px solid #41556d;border-radius:6px;padding:8px}button{cursor:pointer}button[aria-pressed=true]{border-color:var(--accent)}:focus-visible{outline:2px solid var(--accent);outline-offset:3px}.filters{display:flex;gap:12px;align-items:end;flex-wrap:wrap}.layout{display:grid;grid-template-columns:minmax(0,1.06fr) minmax(0,1fr);gap:14px;align-items:start}.panel{border:1px solid var(--edge);padding:16px;border-radius:10px;background:var(--panel)}.wide{grid-column:1/-1}.families{display:grid;gap:10px;margin:12px 0 18px}.family-row{display:grid;grid-template-columns:65px 1fr 110px;gap:8px;align-items:center}.track{height:12px;border-radius:3px;background:#26364a;position:relative}.track i{display:block;height:100%;border-radius:3px}.track b{position:absolute;top:-2px;bottom:-2px;border-left:2px solid #edf4ff}.stats{text-align:right;font-variant-numeric:tabular-nums}.histograms{display:grid;grid-template-columns:repeat(auto-fit,minmax(138px,1fr));gap:10px}.histogram{padding:10px;background:#121b27;border:1px solid var(--edge);border-radius:6px}.plot{height:49px;display:flex;align-items:end;gap:3px;border-bottom:1px solid #5c738e;margin:8px 0 5px}.plot i{flex:1;background:var(--accent);border-radius:2px 2px 0 0}.scale{display:flex;justify-content:space-between}.examples,.frames,.comparison{display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:10px}.examples button{text-align:left}.examples img,.frames img,.comparison video,#episodeVideo{width:100%;display:block;aspect-ratio:16/11;object-fit:contain;background:#0a0f16;border-radius:4px}.examples img{margin-bottom:6px}figure{margin:0}figcaption{color:var(--muted);margin-top:4px}#examples:empty,#frames:empty{display:none}.inspect-tools{display:flex;gap:10px;align-items:end;flex-wrap:wrap}.inspect-tools label{flex:1;min-width:150px}#episode{width:100%}canvas{display:block;width:100%;height:330px;background:#0d1520;border:1px solid var(--edge);border-radius:6px;touch-action:none;cursor:grab;margin-top:10px}.key{color:var(--muted);font-size:12px}.key span{white-space:nowrap;margin-right:10px}.key i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}.comparison{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}#compareTime{width:min(360px,100%)}[hidden]{display:none!important}@media(max-width:850px){.layout{grid-template-columns:1fr}canvas{height:290px}}
+</style>
+<script defer src="lighting.js"></script>
+</head>
+<body>
+<header>
+<nav><a href="index.html">Video gallery</a><a id="poseLink" href="viewer.html" hidden>3D pose viewer</a><a href="lighting.html" aria-current="page">Lighting coverage</a></nav>
+<h1>Lighting coverage</h1>
+<div class="filters">
+<label>Cohort <select id="cohort"></select></label>
+<label>Task <select id="task"></select></label>
+<label id="releaseLabel" hidden>Release <select id="release"></select></label>
+<label>Light family <select id="family"><option value="">All families</option></select></label>
+</div>
+<p id="coverage" role="status">Loading lighting data…</p>
+</header>
+<main class="layout">
+<section class="panel">
+<h2>Light settings</h2>
+<p id="baseline"></p>
+<div id="families" class="families"></div>
+<div id="histograms" class="histograms"></div>
+<h2 style="margin-top:20px">Task-area brightness</h2>
+<p id="brightness"></p>
+<div id="brightnessPlot" class="histograms" style="margin-bottom:10px" hidden></div>
+<div id="examples" class="examples"></div>
+</section>
+<section class="panel">
+<h2>Inspect a light rig</h2>
+<div class="inspect-tools">
+<label>Episode or preview <select id="episode"></select></label>
+<button id="aggregate" type="button" aria-pressed="false">Show aggregate</button>
+</div>
+<canvas id="rig" aria-label="Interactive 3D diagram of the table, robot base, and lights" tabindex="0"></canvas>
+<p class="key"><span><i style="background:#ffc477"></i>Ceiling</span><span><i style="background:#8fcfff"></i>Daylight</span><span><i style="background:#84d3b3"></i>Fill</span><span><i style="background:#7189a3"></i>Robot / base</span>Drag or use arrow keys to orbit.</p>
+<p id="rigInfo"></p>
+<div id="frames" class="frames"></div>
+<video id="episodeVideo" controls preload="none" hidden></video>
+</section>
+<section id="comparisonSection" class="panel wide" hidden>
+<h2>Same trajectory, different lighting</h2>
+<p id="comparisonInfo"></p>
+<label>Compare at the same time <input id="compareTime" type="range" min="0" max="0" step="0.0625"><output id="compareTimeLabel"></output></label>
+<div id="comparison" class="comparison"></div>
+</section>
+</main>
+</body>
+</html>
