@@ -2,20 +2,26 @@
 
 const $ = id => document.getElementById(id);
 const ui = Object.fromEntries([
-  'cohort', 'task', 'release', 'family', 'episode', 'coverage', 'baseline',
+  'cohort', 'task', 'release', 'family', 'categoryLabel', 'episode', 'coverage', 'baseline',
   'families', 'histograms', 'brightness', 'brightnessPlot', 'examples', 'frames', 'rig',
   'rigInfo', 'aggregate', 'episodeVideo', 'poseLink', 'releaseLabel',
-  'comparisonSection', 'comparisonInfo', 'comparison', 'compareTime', 'compareTimeLabel',
+  'comparisonSection', 'comparisonTitle', 'comparisonInfo', 'comparison', 'compareTime', 'compareTimeLabel',
+  'comparePlay', 'compareRestart',
 ].map(id => [id, $(id)]));
 const labels = {
   intensity: 'Intensity', ambient: 'Ambient', red: 'Red', green: 'Green', blue: 'Blue',
   height_m: 'Ceiling height (m)', radius_m: 'Bulb radius (m)',
+  azimuth_deg: 'Light azimuth (°)', offset_m: 'Horizontal offset (m)',
 };
 const colors = {indoor: '#ffc477', daylight: '#8fcfff', mixed: '#84d3b3'};
 const count = value => value.toLocaleString();
 const percent = share => (100 * share).toFixed(1) + '%';
 const name = value => value.replaceAll('_', ' ');
 const numeric = value => Number.isFinite(value);
+const cohortKind = () => data.cohorts.find(cohort => cohort.label === ui.cohort.value)?.kind;
+const categoryKey = () => cohortKind() === 'indoor_comparison' ? 'setup' : 'family';
+const categoryName = key => data.indoor_setups?.[key] ?? key;
+const lightingName = row => categoryName(row.settings.setup ?? row.settings.family) ?? 'family unavailable';
 let data, choices = [], current = [], selected, exampleIds = new Set(), emitterGroups = [];
 let yaw = -.7, elevation = .6;
 const ctx = ui.rig.getContext('2d');
@@ -39,14 +45,16 @@ function distinct(rows, field) {
 
 function renderSettings(rows, cohortRows, production) {
   ui.families.replaceChildren();
-  const known = cohortRows.filter(row => Object.hasOwn(data.families, row.settings.family));
-  for (const [family, expected] of Object.entries(data.families)) {
-    const n = known.filter(row => row.settings.family === family).length;
+  const key = categoryKey();
+  const categories = key === 'setup' ? data.setup_shares : data.families;
+  const known = cohortRows.filter(row => Object.hasOwn(categories, row.settings[key]));
+  for (const [category, expected] of Object.entries(categories)) {
+    const n = known.filter(row => row.settings[key] === category).length;
     const share = known.length ? n / known.length : 0;
     const bar = el('div', undefined, 'track');
     const fill = el('i');
     fill.style.width = percent(share);
-    fill.style.background = colors[family];
+    fill.style.background = colors[category] ?? colors.indoor;
     bar.append(fill);
     if (production) {
       const target = el('b');
@@ -57,18 +65,21 @@ function renderSettings(rows, cohortRows, production) {
     const item = el('div', undefined, 'family-row');
     const stats = el('span', known.length ? count(n) + ' · ' + percent(share) : '—', 'stats');
     if (production) stats.append(el('br'), el('small', percent(expected) + ' config.'));
-    item.append(el('span', family), bar, stats);
+    item.append(el('span', categoryName(category)), bar, stats);
     ui.families.append(item);
   }
 
   ui.histograms.replaceChildren();
-  for (const [key, configured] of Object.entries(data.ranges)) {
-    const values = rows.map(row => row.settings[key]).filter(numeric);
+  const ranges = key === 'setup' ? data.indoor_ranges : data.ranges;
+  for (const [field, configured] of Object.entries(ranges)) {
+    const relevant = ['azimuth_deg', 'offset_m'].includes(field)
+      ? rows.filter(row => row.settings.setup !== 'centered_overhead') : rows;
+    const values = relevant.map(row => row.settings[field]).filter(numeric);
     const low = Math.min(configured[0], ...values);
     const high = Math.max(configured[1], ...values);
-    const panel = histogram(labels[key], values, low, high, 2);
+    const panel = histogram(labels[field], values, low, high, 2);
     panel.append(
-      el('small', count(values.length) + ' / ' + count(rows.length) + ' recorded'));
+      el('small', count(values.length) + ' / ' + count(relevant.length) + ' recorded'));
     if (production) {
       panel.append(el('br'), el('small', 'Configured ' + configured.join('–')));
     }
@@ -131,7 +142,7 @@ function cameraExamples() {
     button.type = 'button';
     if (row.frames?.length) button.append(image(row.frames[0]));
     button.append(el('strong', marks.join(' / ') + ' · ' + row.brightness.toFixed(1)),
-      el('br'), el('small', name(row.task) + ' · ' + (row.settings.family ?? 'family unavailable')));
+      el('br'), el('small', name(row.task) + ' · ' + lightingName(row)));
     button.addEventListener('click', () => {
       ui.episode.value = row.id;
       inspect();
@@ -150,13 +161,22 @@ function image(frame) {
 
 function sourceChanged() {
   const source = data.cohorts.find(cohort => cohort.label === ui.cohort.value);
-  choices = data.episodes.filter(row => source?.label === data.all_cohort || row.cohort === source?.label);
+  const comparison = data.cohorts.find(cohort => cohort.kind === 'indoor_comparison');
+  const allPublished = data.all_cohort && source?.label === data.all_cohort;
+  choices = data.episodes.filter(row => row.cohort === source?.label ||
+    (allPublished && row.cohort !== comparison?.label));
   options(ui.task, [['', 'All tasks'], ...distinct(choices, 'task').map(task => [task, name(task)])]);
   ui.poseLink.hidden = !(data.pose_viewer || data.cohorts.some(cohort => cohort.kind === 'preview'));
-  ui.baseline.textContent = source?.kind === 'preview'
+  const indoors = categoryKey() === 'setup';
+  ui.categoryLabel.textContent = indoors ? 'Indoor setup' : 'Light family';
+  options(ui.family, [['', indoors ? 'All setups' : 'All families'],
+    ...Object.keys(indoors ? data.setup_shares : data.families).map(key => [key, categoryName(key)])]);
+  ui.baseline.textContent = indoors
+    ? 'One comparison clip per indoor setup. White ticks show equal sampling in the current randomizer.'
+    : source?.kind === 'preview'
     ? 'Designed review examples. Each preview is a rendered setting.'
     : source?.kind === 'public_preview'
-      ? 'One vote per published Joint preview. White ticks show the configured sampler mix.'
+      ? 'Previously published Joint previews. White ticks show the sampler mix used for those previews.'
       : 'One vote per completed episode. White ticks show the configured family mix.';
   taskChanged();
 }
@@ -173,18 +193,20 @@ function taskChanged() {
 function filter() {
   const rows = choices.filter(row => (!ui.task.value || row.task === ui.task.value) &&
     (!ui.release.value || row.release === ui.release.value));
-  current = rows.filter(row => !ui.family.value || row.settings.family === ui.family.value);
-  const kind = data.cohorts.find(cohort => cohort.label === ui.cohort.value)?.kind;
-  const n = current.filter(row => row.settings.family).length;
-  const total = count(current.length) + (kind?.includes('preview') ? ' previews' : ' episodes');
+  const key = categoryKey();
+  current = rows.filter(row => !ui.family.value || row.settings[key] === ui.family.value);
+  const kind = cohortKind();
+  const n = current.filter(row => row.settings[key]).length;
+  const total = count(current.length) + (kind?.includes('preview') || key === 'setup' ? ' previews' : ' episodes');
   ui.coverage.textContent = current.length
-    ? count(n) + ' / ' + total + ' with a recorded light family'
+    ? count(n) + ' / ' + total + (key === 'setup' ? ' with an indoor setup' : ' with a recorded light family')
     : 'No matching lighting records. Configured settings are shown below.';
   renderSettings(current, rows, kind !== 'preview');
   cameraExamples();
   const example = current.find(row => exampleIds.has(row.id) && row.frames?.length) || current[0];
   options(ui.episode, example ? current.map(row => [
-    row.id, name(row.task) + ' · ' + row.id.split(':').at(-1).split('/').slice(-2).join('/'),
+    row.id, name(row.task) + ' · ' + (key === 'setup' ? lightingName(row) :
+      row.id.split(':').at(-1).split('/').slice(-2).join('/')),
   ]) : [['', 'No matches']], example?.id ?? '');
   ui.episode.disabled = !example;
   emitterGroups = groupEmitters(current);
@@ -200,7 +222,7 @@ function inspect() {
   ui.rigInfo.textContent = aggregate
     ? count(n) + ' / ' + count(current.length) + ' records with scene lights. Marker size tracks record count.'
     : selected?.lights?.length
-      ? selected.lights.length + ' world lights · ' + (selected.settings.family ?? 'family unavailable') +
+      ? selected.lights.length + ' world lights · ' + lightingName(selected) +
         (selected.robot ? '' : ' · robot base shown')
       : 'Saved light positions are unavailable for this selection.';
   for (const frame of selected?.frames ?? []) {
@@ -323,21 +345,31 @@ function drawRig() {
 function setupComparison(rows) {
   if (!rows.length) return;
   ui.comparisonSection.hidden = false;
+  const indoors = Boolean(rows[0].settings.setup);
+  if (indoors) ui.comparisonTitle.textContent = 'Compare the three indoor setups';
   ui.comparisonInfo.textContent = name(rows[0].task) +
-    ' · Same saved motion, camera, room, and surfaces. Starts at ' + rows[0].phase + '.';
+    (indoors ? ' · Same motion, camera, room, surfaces, and total light strength. The pair splits light 80/20.' :
+      ' · Same saved motion, camera, room, and surfaces.') + ' Starts at ' + rows[0].phase + '.';
   const videos = [];
-  function seek() {
-    const time = Number(ui.compareTime.value);
-    ui.compareTimeLabel.value = time.toFixed(2) + ' s';
-    for (const video of videos) {
-      if (video.readyState >= 1) {
-        video.pause();
-        video.currentTime = Math.min(time, video.duration);
-      }
-    }
-  }
   const durations = [];
   const start = rows[0].time;
+  let playing = false;
+  function timeLabel(time) {
+    ui.compareTimeLabel.value = time.toFixed(2) + ' s';
+  }
+  function seek(value) {
+    const time = Number(value);
+    ui.compareTime.value = time;
+    timeLabel(time);
+    for (const video of videos) {
+      if (video.readyState >= 1) video.currentTime = Math.min(time, video.duration);
+    }
+  }
+  function pause() {
+    playing = false;
+    videos.forEach(video => video.pause());
+    ui.comparePlay.textContent = 'Play comparison';
+  }
   ui.compareTime.max = start;
   ui.compareTime.value = start;
   for (const row of rows) {
@@ -350,17 +382,83 @@ function setupComparison(rows) {
     video.addEventListener('loadedmetadata', () => {
       durations.push(video.duration);
       ui.compareTime.max = Math.min(...durations);
-      seek();
+      seek(ui.compareTime.value);
     });
     videos.push(video);
-    figure.append(video, el('figcaption', [
+    figure.append(video, el('figcaption', indoors ? lightingName(row) : [
       row.settings.family, numeric(row.settings.intensity) ? 'intensity ' +
       row.settings.intensity.toFixed(2) : null,
     ].filter(Boolean).join(' · ')));
+    if (indoors) {
+      const actions = el('div', undefined, 'compare-actions');
+      const inspectButton = el('button', 'Inspect rig');
+      inspectButton.addEventListener('click', () => {
+        ui.cohort.value = row.cohort;
+        ui.task.value = '';
+        ui.family.value = '';
+        sourceChanged();
+        ui.episode.value = row.id;
+        inspect();
+        ui.rig.focus();
+      });
+      const expand = el('button', 'Full screen');
+      expand.addEventListener('click', async () => {
+        pause();
+        video.controls = true;
+        if (video.requestFullscreen) {
+          try {
+            await video.requestFullscreen();
+          } catch {
+            video.controls = false;
+          }
+        } else if (video.webkitEnterFullscreen) {
+          video.webkitEnterFullscreen();
+        }
+      });
+      video.addEventListener('fullscreenchange', () => {
+        if (document.fullscreenElement) return;
+        pause();
+        video.controls = false;
+        seek(ui.compareTime.value);
+        expand.focus();
+      });
+      actions.append(inspectButton, expand);
+      figure.append(actions);
+    }
     ui.comparison.append(figure);
   }
-  ui.compareTime.addEventListener('input', seek);
-  seek();
+  const lead = videos[0];
+  lead.addEventListener('timeupdate', () => {
+    if (!playing || lead.seeking) return;
+    ui.compareTime.value = lead.currentTime;
+    timeLabel(lead.currentTime);
+    for (const video of videos.slice(1)) {
+      if (!video.seeking && Math.abs(video.currentTime - lead.currentTime) > .2) {
+        video.currentTime = lead.currentTime;
+      }
+    }
+  });
+  lead.addEventListener('ended', pause);
+  ui.comparePlay.addEventListener('click', async () => {
+    if (playing) {
+      pause();
+      return;
+    }
+    if (lead.ended) seek(0);
+    playing = true;
+    ui.comparePlay.textContent = 'Pause comparison';
+    try {
+      await Promise.all(videos.map(video => video.play()));
+    } catch {
+      pause();
+    }
+  });
+  ui.compareRestart.addEventListener('click', () => seek(0));
+  ui.compareTime.addEventListener('input', () => {
+    pause();
+    seek(ui.compareTime.value);
+  });
+  seek(start);
 }
 
 ui.cohort.addEventListener('change', sourceChanged);
@@ -402,8 +500,7 @@ fetch('lighting.json', {cache: 'no-store'})
     options(ui.cohort, data.cohorts.length
       ? data.cohorts.map(cohort => [cohort.label, cohort.label]) : [['', 'Configured sampler']],
       source?.label ?? '');
-    options(ui.family, [['', 'All families'], ...Object.keys(data.families).map(family => [family, family])]);
-    sourceChanged();
+      sourceChanged();
     setupComparison(data.comparison);
   })
   .catch(error => {
