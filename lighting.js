@@ -111,6 +111,7 @@ function selectClip(clip, goToViewer = false) {
     tile.rig.setAttribute('aria-pressed', clip.id === tile.clip.id);
   }
   $('selected').textContent = clip.label + ' · ' + settingsText(clip);
+  $('openSelected').disabled = false;
   draw();
   if (goToViewer) $('distribution').scrollIntoView({block: 'start'});
 }
@@ -267,6 +268,7 @@ $('setup').addEventListener('change', () => {
 });
 $('orbit').addEventListener('click', () => angle(-.8, .58));
 $('top').addEventListener('click', () => angle(-.8, Math.PI / 2));
+$('openSelected').addEventListener('click', () => showClip(selected, $('openSelected')));
 $('player').addEventListener('close', () => {
   $('clipVideo').pause();
   $('clipVideo').removeAttribute('src');
