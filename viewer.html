@@ -8,7 +8,7 @@
 </style>
 </head>
 <body>
-<header><a href="index.html">← Video gallery</a><h1>3D task viewer</h1><p>Explore camera and robot poses from physical Joint rollouts, then inspect a selected demo at three saved poses.</p></header>
+<header><a href="index.html">← Video gallery</a> · <a href="lighting.html">Lighting coverage</a><h1>3D task viewer</h1><p>Explore camera and robot poses from physical Joint rollouts, then inspect a selected demo at three saved poses.</p></header>
 <div class="controls">
 <label>View <select id="view"><option value="distribution">Pose distribution</option><option value="single">Selected demo</option></select></label>
 <label id="poseSetLabel">Pose set <select id="poseSet"><option value="released">Physical Joint previews</option><option value="leap">LEAP Hand pose variation</option><option value="original">Historical pose samples</option></select></label>
@@ -25,7 +25,7 @@
 <label id="showRegionsLabel"><input id="showRegions" type="checkbox" checked>Position regions</label>
 </div>
 <main><section><div class="stage"><canvas id="scene" tabindex="0" aria-label="Rotatable 3D task scene"></canvas><canvas id="overlay" aria-hidden="true"></canvas></div><p class="hint" id="hint">Drag to orbit · Shift-drag or right-drag to pan · Scroll to zoom. Click a camera or robot base to select its preview.</p><div id="distributionInfo"><div id="regionStatus" class="hint" aria-live="polite"></div><div id="ranges" class="hint"></div><div id="legend" class="hint"></div><div id="poseSelection" class="hint"></div></div></section><aside class="side"><video id="video" controls muted playsinline></video><div class="status" id="status">Loading current release scenes…</div><section id="leapPoseSummary" hidden><h2>LEAP Hand pose variation</h2><p>Select a camera or base marker to play its matching rollout with varied task geometry, surfaces, room and lighting.</p><p id="sharedAppearance"></p></section><details><summary>Sampled variation</summary><pre id="parameters"></pre></details></aside></main>
-<script src="pose-regions.js?v=2"></script>
+<script src="pose-regions.js?v=3"></script>
 <script>
 const $=id=>document.getElementById(id),canvas=$('scene'),overlay=$('overlay'),gl=canvas.getContext('webgl',{alpha:false,antialias:true,stencil:true}),fallback=gl?null:canvas.getContext('2d'),ctx=overlay.getContext('2d');
 let payload,episode,yaw=.75,elev=.55,scale=650,center=[-.12,0,.07],drag=null,dragStart=null,mode='orbit',buffers=new Map(),program,uniform={},hitPoints=[],poseSelections={original:{camera:null,robot:null},leap:{camera:null,robot:null}},displayedPoses={camera:[],robot:[]};

@@ -213,7 +213,7 @@ const PoseRegions = (() => {
   }
 
   function load(redraw) {
-    fetch('pose-regions.json?v=1')
+    fetch('pose-regions.json', {cache:'no-store'})
       .then(response => {
         if (!response.ok) throw new Error('Position regions HTTP ' + response.status);
         return response.json();
