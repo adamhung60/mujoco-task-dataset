@@ -22,8 +22,10 @@
 <label id="tableLabel"><input id="showTable" type="checkbox" checked>Table</label>
 <label id="roomLabel"><input id="showRoom" type="checkbox">Background</label>
 <label><input id="showCamera" type="checkbox" checked>Cameras</label>
+<label id="showRegionsLabel"><input id="showRegions" type="checkbox" checked>Position regions</label>
 </div>
-<main><section><div class="stage"><canvas id="scene" tabindex="0" aria-label="Rotatable 3D task scene"></canvas><canvas id="overlay" aria-hidden="true"></canvas></div><p class="hint" id="hint">Drag to orbit · Shift-drag or right-drag to pan · Scroll to zoom. Click a camera or robot base to select its preview.</p><div id="distributionInfo"><div id="ranges" class="hint"></div><div id="legend" class="hint"></div><div id="poseSelection" class="hint"></div></div></section><aside class="side"><video id="video" controls muted playsinline></video><div class="status" id="status">Loading current release scenes…</div><section id="leapPoseSummary" hidden><h2>LEAP Hand pose variation</h2><p>Select a camera or base marker to play its matching rollout with varied task geometry, surfaces, room and lighting.</p><p id="sharedAppearance"></p></section><details><summary>Sampled variation</summary><pre id="parameters"></pre></details></aside></main>
+<main><section><div class="stage"><canvas id="scene" tabindex="0" aria-label="Rotatable 3D task scene"></canvas><canvas id="overlay" aria-hidden="true"></canvas></div><p class="hint" id="hint">Drag to orbit · Shift-drag or right-drag to pan · Scroll to zoom. Click a camera or robot base to select its preview.</p><div id="distributionInfo"><div id="regionStatus" class="hint" aria-live="polite"></div><div id="ranges" class="hint"></div><div id="legend" class="hint"></div><div id="poseSelection" class="hint"></div></div></section><aside class="side"><video id="video" controls muted playsinline></video><div class="status" id="status">Loading current release scenes…</div><section id="leapPoseSummary" hidden><h2>LEAP Hand pose variation</h2><p>Select a camera or base marker to play its matching rollout with varied task geometry, surfaces, room and lighting.</p><p id="sharedAppearance"></p></section><details><summary>Sampled variation</summary><pre id="parameters"></pre></details></aside></main>
+<script src="pose-regions.js?v=1"></script>
 <script>
 const $=id=>document.getElementById(id),canvas=$('scene'),overlay=$('overlay'),gl=canvas.getContext('webgl',{alpha:false,antialias:true}),fallback=gl?null:canvas.getContext('2d'),ctx=overlay.getContext('2d');
 let payload,episode,yaw=.75,elev=.55,scale=650,center=[-.12,0,.07],drag=null,dragStart=null,mode='orbit',buffers=new Map(),program,uniform={},hitPoints=[],poseSelections={original:{camera:null,robot:null},leap:{camera:null,robot:null}},displayedPoses={camera:[],robot:[]};
@@ -164,13 +166,16 @@ function drawDistribution(){
  if(gl){gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(.078,.118,.165,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT)}else{fallback.setTransform(ratio,0,0,ratio,0,0);fallback.fillStyle='#141e2a';fallback.fillRect(0,0,rect.width,rect.height)}
  drawSelectedDistributionScene(rect,ratio);ctx.setTransform(ratio,0,0,ratio,0,0);ctx.clearRect(0,0,rect.width,rect.height);
  const {right,up}=basis(),project=p=>{const v=sub(p,center);return [rect.width/2+dot(v,right)*scale,rect.height/2-dot(v,up)*scale]},line=(a,b,color,width)=>{ctx.strokeStyle=color;ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(...project(a));ctx.lineTo(...project(b));ctx.stroke()};
+ PoseRegions.draw(ctx, project, poseSet(), $('taskFilter').value);
  hitPoints=[];const pairedMarkers=separate(),original=poseSet()==='original',palette=['#ffb86b','#74d9c0','#a8a0ff','#f587a8','#e2d36c','#81b8ff','#ce9bea','#9be077'],tasks=[...new Set(poseRows('camera').map(e=>e.task))].sort(),color=item=>palette[tasks.indexOf(item.task)%palette.length];
  if($('showCamera').checked)for(const item of displayedPoses.camera){const selected=pairedMarkers?item.sourceIndex===selection().camera:item.episode===episode,stroke=selected?'#ffdf95':color(item)+'9c',origin=posePoint(item.camera),depth=original?.065:-.065,halfY=Math.abs(depth)*Math.tan(item.camera_fovy_deg*Math.PI/360),halfX=halfY*512/352,corners=[[-halfX,-halfY,depth],[halfX,-halfY,depth],[halfX,halfY,depth],[-halfX,halfY,depth]].map(p=>world(item.camera,p));for(let i=0;i<4;i++){line(origin,corners[i],stroke,selected?2.6:1);line(corners[i],corners[(i+1)%4],stroke,selected?2.6:1)}const p=project(origin);ctx.fillStyle=stroke;ctx.beginPath();ctx.arc(...p,selected?6:3.5,0,2*Math.PI);ctx.fill();hitPoints.push({kind:pairedMarkers?'camera':'release',item:pairedMarkers?item:item.episode,p});if(selected){ctx.fillStyle='#e5edf5';ctx.font='12px system-ui';ctx.fillText(pairedMarkers?`camera · ${item.label}`:'selected camera',p[0]+8,p[1]-8)}}
  if($('showRobot').checked)for(const item of displayedPoses.robot){const selected=pairedMarkers?item.sourceIndex===selection().robot:item.episode===episode,stroke=selected?'#a9f0dd':color(item)+'9c',base=posePoint(item.robot_base);for(const axis of [[.055,0,0],[0,.055,0],[0,0,.055]])line(base,world(item.robot_base,axis),stroke,selected?2.6:1.4);const p=project(base);ctx.fillStyle=stroke;ctx.fillRect(p[0]-(selected?5:3),p[1]-(selected?5:3),selected?10:6,selected?10:6);hitPoints.push({kind:pairedMarkers?'robot':'release',item:pairedMarkers?item:item.episode,p});if(selected){ctx.fillStyle='#e5edf5';ctx.font='12px system-ui';ctx.fillText(pairedMarkers?`base · ${item.label}`:'selected robot base',p[0]+8,p[1]-8)}}
 }
 function fitDistribution(){
  updatePoseChoices();const points=[...poseRows('camera').map(e=>posePoint(e.camera)),...poseRows('robot').map(e=>posePoint(e.robot_base))];
- if(episode){for(const item of distributionFrame().geoms){if(!distributionFitIncludes(item))continue;const b=payload.geometry[item.mesh].bounds;for(const x of [0,1])for(const y of [0,1])for(const z of [0,1])points.push(world(item.transform,[b[x][0],b[y][1],b[z][2]]))}}
+ const regionPoints=PoseRegions.bounds(poseSet(), $('taskFilter').value);
+ if(episode){for(const item of distributionFrame().geoms){if(!distributionFitIncludes(item)||(regionPoints.length&&item.kind==='task'))continue;const b=payload.geometry[item.mesh].bounds;for(const x of [0,1])for(const y of [0,1])for(const z of [0,1])points.push(world(item.transform,[b[x][0],b[y][1],b[z][2]]))}}
+ points.push(...regionPoints);
  if(!points.length)return;const ranges=bounds(points);center=ranges.map(x=>(x[0]+x[1])/2);const {right,up}=basis(),xs=points.map(p=>dot(sub(p,center),right)),ys=points.map(p=>dot(sub(p,center),up));scale=Math.min(canvas.clientWidth*.78/Math.max(.25,Math.max(...xs)-Math.min(...xs)),canvas.clientHeight*.78/Math.max(.25,Math.max(...ys)-Math.min(...ys)));distributionRanges();drawDistribution()
 }
 function updateTaskChoices(){
@@ -184,6 +189,7 @@ function updateTaskChoices(){
 function syncView(){
  if(!payload)return;
  const single=$('view').value==='single',menus=separate();
+ $('showRegionsLabel').hidden=single;$('regionStatus').hidden=single;
  updateTaskChoices();
  $('poseSetLabel').hidden=false;
  for(const id of ['cameraChoiceLabel','robotChoiceLabel'])$(id).hidden=single||!menus;
@@ -243,7 +249,7 @@ function selectEpisode(item,refit=true){
  }
 }
 function choose(){
- const items=activeEpisodes(),task=$('taskFilter').value||episode?.task||items[0].task;
+ const items=activeEpisodes(),task=$('taskFilter').value||(items.some(e=>e.task===episode?.task)?episode.task:items[0].task);
  const item=poseSet()==='leap'?items.find(e=>e.id===$('variant').value):items.find(e=>e.task===task&&e.variant===Number($('variant').value));
  if(item)selectEpisode(item);
 }
@@ -280,6 +286,8 @@ $('variant').onchange=choose;
 $('pose').onchange=()=>{if(episode){$('video').currentTime=frame().time_seconds;draw()}};
 for(const id of ['showRobot','showTable','showRoom','showCamera'])$(id).onchange=draw;
 $('fit').onclick=fit;
+$('showRegions').onchange=fit;
+PoseRegions.load(() => {if(payload&&$('view').value==='distribution')fitDistribution()});
 new ResizeObserver(draw).observe(canvas);
 canvas.onpointerdown=e=>{e.preventDefault();drag=dragStart=[e.clientX,e.clientY];mode=e.shiftKey||e.button===1||e.button===2?'pan':'orbit';canvas.setPointerCapture(e.pointerId)};canvas.onpointermove=e=>{if(!drag)return;const dx=e.clientX-drag[0],dy=e.clientY-drag[1];if(mode==='pan'){const {right,up}=basis();center=center.map((v,i)=>v-dx*right[i]/scale+dy*up[i]/scale)}else{yaw-=dx*.008;elev=Math.max(-.15,Math.min(1.5,elev+dy*.008))}drag=[e.clientX,e.clientY];draw()};canvas.onpointerup=e=>{if($('view').value==='distribution'&&dragStart&&Math.hypot(e.clientX-dragStart[0],e.clientY-dragStart[1])<5){const rect=canvas.getBoundingClientRect(),p=[e.clientX-rect.left,e.clientY-rect.top],nearest=hitPoints.map(h=>({...h,d:Math.hypot(h.p[0]-p[0],h.p[1]-p[1])})).sort((a,b)=>a.d-b.d)[0];if(nearest&&nearest.d<14){if(nearest.kind==='release')selectEpisode(nearest.item,false);else choosePose(nearest.kind,nearest.item.sourceIndex)}}drag=dragStart=null;if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId)};canvas.onpointercancel=()=>drag=dragStart=null;canvas.oncontextmenu=e=>e.preventDefault();canvas.onwheel=e=>{e.preventDefault();scale=Math.max(100,Math.min(5000,scale*Math.exp(-e.deltaY*.001)));draw()};
 fetch('viewer_data.json',{cache:'no-store'}).then(r=>{
