@@ -8,7 +8,7 @@
 </style>
 </head>
 <body>
-<header><a href="index.html">← Video gallery</a> · <a href="lighting.html">Lighting coverage</a><h1>3D task viewer</h1><p>Explore camera and robot poses from physical Joint rollouts, then inspect a selected demo at three saved poses.</p></header>
+<header><a href="index.html">← Video gallery</a> · <a id="lightingLink" href="lighting.html">Lighting coverage</a><h1 id="viewerHeading">3D task viewer</h1><p>Explore camera and robot poses from physical Joint rollouts, then inspect a selected demo at three saved poses.</p></header>
 <div class="controls">
 <label>View <select id="view"><option value="distribution">Pose distribution</option><option value="single">Selected demo</option></select></label>
 <label id="poseSetLabel">Pose set <select id="poseSet"><option value="released">Physical Joint previews</option><option value="leap">LEAP Hand pose variation</option><option value="original">Historical pose samples</option></select></label>
@@ -216,6 +216,11 @@ function updateTaskChoices(){
 }
 function syncView(){
  if(!payload)return;
+ const leap = $('poseSet').value === 'leap';
+ $('lightingLink').href = leap ? 'lighting.html?environment=leap' : 'lighting.html';
+ $('lightingLink').textContent = leap ? 'LEAP Hand lighting' : 'Lighting coverage';
+ $('viewerHeading').textContent = leap ? 'LEAP Hand 3D pose viewer' : '3D task viewer';
+
  const single=$('view').value==='single',menus=separate();
  $('showRegionsLabel').hidden=single;$('regionStatus').hidden=single;
  updateTaskChoices();

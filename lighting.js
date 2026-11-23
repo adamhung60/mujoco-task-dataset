@@ -291,7 +291,15 @@ canvas.addEventListener('keydown', event => {
 });
 new ResizeObserver(draw).observe(canvas);
 
-fetch('lighting-office.json', {cache: 'no-store'})
+const leap = new URLSearchParams(location.search).get('environment') === 'leap';
+if (leap) {
+  document.querySelector('h1').textContent = 'LEAP Hand lighting coverage';
+  document.title = 'LEAP Hand lighting coverage · Robot task dataset';
+  $('poseLink').href = 'viewer.html?poses=leap';
+  $('otherLighting').href = 'lighting.html';
+  $('otherLighting').textContent = 'YAM lighting';
+}
+fetch(leap ? 'lighting-leap.json' : 'lighting-office.json', {cache: 'no-store'})
   .then(response => {
     if (!response.ok) throw new Error('Lighting coverage could not load.');
     return response.json();
@@ -300,7 +308,7 @@ fetch('lighting-office.json', {cache: 'no-store'})
     data = payload;
     time = data.time;
     $('time').max = data.duration - 1 / 16;
-    $('summary').textContent = 'Round Insert · ' + data.clips.length + ' varied renders selected from ' +
+    $('summary').textContent = (data.demo || 'Round Insert') + ' · ' + data.clips.length + ' varied renders selected from ' +
       data.passing_count + ' readable draws out of ' + data.candidate_count +
       '. Same rollout, camera, room, and materials.';
     for (const [role, label] of Object.entries(roleLabels)) {
